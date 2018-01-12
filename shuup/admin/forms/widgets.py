@@ -11,6 +11,7 @@ import json
 
 import six
 from django.core.urlresolvers import reverse_lazy
+from django.forms import TimeInput as DjangoTimeInput
 from django.forms import HiddenInput, Select, SelectMultiple, Textarea, Widget
 from django.forms.utils import flatatt
 from django.utils.encoding import force_text
@@ -210,11 +211,15 @@ class PackageProductChoiceWidget(ProductChoiceWidget):
 
 class QuickAddRelatedObjectSelect(Select):
     url = ""
+    model = ""
 
     def render(self, name, value, attrs=None, choices=()):
         if value is None:
             value = ''
         final_attrs = self.build_attrs(attrs, name=name)
+        if self.model:
+            final_attrs['data-model'] = self.model
+            choices = []
         output = [format_html('<select{}>', flatatt(final_attrs))]
         options = self.render_options(choices, [value])
         if options:
@@ -280,6 +285,7 @@ class QuickAddProductTypeSelect(QuickAddRelatedObjectSelect):
 
 class QuickAddManufacturerSelect(QuickAddRelatedObjectSelect):
     url = reverse_lazy("shuup_admin:manufacturer.new")
+    model = "shuup.Manufacturer"
 
 
 class QuickAddPaymentMethodsSelect(QuickAddRelatedObjectMultiSelect):
@@ -292,3 +298,7 @@ class QuickAddShippingMethodsSelect(QuickAddRelatedObjectMultiSelect):
 
 class QuickAddUserMultiSelect(QuickAddRelatedObjectMultiSelect):
     url = reverse_lazy("shuup_admin:user.new")
+
+
+class TimeInput(DjangoTimeInput):
+    input_type = "time"

@@ -4,6 +4,14 @@ shuup.front.apps.registration package
 Submodules
 ----------
 
+shuup.front.apps.registration.forms module
+------------------------------------------
+
+.. automodule:: shuup.front.apps.registration.forms
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 shuup.front.apps.registration.notify_events module
 --------------------------------------------------
 
@@ -16,6 +24,14 @@ shuup.front.apps.registration.settings module
 ---------------------------------------------
 
 .. automodule:: shuup.front.apps.registration.settings
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+shuup.front.apps.registration.signals module
+--------------------------------------------
+
+.. automodule:: shuup.front.apps.registration.signals
     :members:
     :undoc-members:
     :show-inheritance:

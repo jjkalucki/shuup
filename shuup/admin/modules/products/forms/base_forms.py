@@ -23,9 +23,10 @@ from shuup.admin.forms.widgets import (
     QuickAddManufacturerSelect, QuickAddPaymentMethodsSelect,
     QuickAddProductTypeSelect, QuickAddShippingMethodsSelect, TextEditorWidget
 )
+from shuup.admin.signals import form_post_clean, form_pre_clean
 from shuup.core.models import (
-    Attribute, AttributeType, Category, Product, ProductMedia,
-    ProductMediaKind, Shop, ShopProduct
+    Attribute, AttributeType, Category, PaymentMethod, Product, ProductMedia,
+    ProductMediaKind, ShippingMethod, ShopProduct, Supplier
 )
 from shuup.utils.i18n import get_language_name
 from shuup.utils.multilanguage_model_form import (
@@ -79,6 +80,7 @@ class ProductBaseForm(MultiLanguageModelForm):
         }
 
     def __init__(self, **kwargs):
+        self.request = kwargs.pop('request', None)
         super(ProductBaseForm, self).__init__(**kwargs)
         self.fields["sales_unit"].required = True  # TODO: Move this to model
         if self.instance.pk:
@@ -105,9 +107,18 @@ class ProductBaseForm(MultiLanguageModelForm):
                 file_id=self.cleaned_data["file"],
                 kind=ProductMediaKind.IMAGE,
             )
-            image.shops.add(Shop.objects.first())
+            shop = self.request.shop
+            image.shops.add(shop)
             instance.primary_image = image
             instance.save()
+        return instance
+
+    def clean(self):
+        form_pre_clean.send(
+            Product, instance=self.instance, cleaned_data=self.cleaned_data)
+        super(ProductBaseForm, self).clean()
+        form_post_clean.send(
+            Product, instance=self.instance, cleaned_data=self.cleaned_data)
 
 
 class ShopProductForm(forms.ModelForm):
@@ -145,8 +156,21 @@ class ShopProductForm(forms.ModelForm):
         }
 
     def __init__(self, **kwargs):
+        # TODO: Revise this. Since this is shop product form then maybe we should have shop available insted of request
+        self.request = kwargs.pop("request", None)
         super(ShopProductForm, self).__init__(**kwargs)
-        category_qs = Category.objects.all_except_deleted()
+        payment_methods_qs = PaymentMethod.objects.all()
+        shipping_methods_qs = ShippingMethod.objects.all()
+        suppliers_qs = Supplier.objects.all()
+        if self.request:
+            shop = self.request.shop
+            payment_methods_qs = payment_methods_qs.filter(shop=shop)
+            shipping_methods_qs = ShippingMethod.objects.filter(shop=shop)
+            suppliers_qs = shop.suppliers.all()
+        self.fields["payment_methods"].queryset = payment_methods_qs
+        self.fields["shipping_methods"].queryset = shipping_methods_qs
+        self.fields["suppliers"].queryset = suppliers_qs
+        category_qs = Category.objects.all_except_deleted(shop=self.request.shop).prefetch_related('translations')
         self.fields["default_price_value"].required = True
         self.fields["primary_category"].queryset = category_qs
         self.fields["categories"].queryset = category_qs
@@ -165,6 +189,8 @@ class ShopProductForm(forms.ModelForm):
         return backorder_maximum
 
     def clean(self):
+        form_pre_clean.send(
+            ShopProduct, instance=self.instance, cleaned_data=self.cleaned_data)
         data = super(ShopProductForm, self).clean()
         if not getattr(settings, "SHUUP_AUTO_SHOP_PRODUCT_CATEGORIES", False):
             return data
@@ -179,6 +205,8 @@ class ShopProductForm(forms.ModelForm):
             categories = Category.objects.filter(pk__in=combined)
         data["primary_category"] = primary_category
         data["categories"] = categories
+        form_post_clean.send(
+            ShopProduct, instance=self.instance, cleaned_data=data)
         return data
 
 
@@ -267,14 +295,12 @@ class BaseProductMediaForm(MultiLanguageModelForm):
             "title",
             "description",
             "purchased",
-            "shops",
             "kind"
         )
 
     def __init__(self, **kwargs):
         self.product = kwargs.pop("product")
         self.allowed_media_kinds = kwargs.pop("allowed_media_kinds")
-        default_shop = kwargs.pop("default_shop")
         super(BaseProductMediaForm, self).__init__(**kwargs)
 
         self.fields["file"].widget = forms.HiddenInput()
@@ -295,9 +321,6 @@ class BaseProductMediaForm(MultiLanguageModelForm):
 
             self.fields["kind"].initial = self.allowed_media_kinds[0]
 
-        if not self.instance.pk:
-            self.fields["shops"].initial = [default_shop]
-
         self.file_url = self.instance.url
 
     def get_thumbnail(self, request):
@@ -317,6 +340,8 @@ class BaseProductMediaForm(MultiLanguageModelForm):
 
     def pre_master_save(self, instance):
         instance.product = self.product
+        shop = self.request.shop
+        instance.shops.add(shop)
 
 
 class BaseProductMediaFormSet(BaseModelFormSet):
@@ -334,6 +359,7 @@ class BaseProductMediaFormSet(BaseModelFormSet):
 
     def __init__(self, *args, **kwargs):
         self.product = kwargs.pop("product")
+        self.request = kwargs.pop("request", None)
         self.default_language = kwargs.pop(
             "default_language", getattr(settings, "PARLER_DEFAULT_LANGUAGE_CODE"))
         self.languages = to_language_codes(kwargs.pop("languages", ()), self.default_language)
@@ -350,8 +376,13 @@ class BaseProductMediaFormSet(BaseModelFormSet):
         kwargs.setdefault("languages", self.languages)
         kwargs.setdefault("product", self.product)
         kwargs.setdefault("allowed_media_kinds", self.allowed_media_kinds)
-        kwargs.setdefault("default_shop", Shop.objects.first().pk)
         return self.form_class(**kwargs)
+
+    def save(self, commit=True):
+        forms = self.forms or []
+        for form in forms:
+            form.request = self.request
+        super(BaseProductMediaFormSet, self).save(commit)
 
 
 class ProductMediaForm(BaseProductMediaForm):

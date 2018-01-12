@@ -14,14 +14,18 @@ from django.utils.functional import lazy
 from django.utils.safestring import mark_safe
 from django.utils.translation import ugettext_lazy as _
 from enumfields import Enum, EnumIntegerField
+from parler.models import TranslatableModel, TranslatedFields
 
 from shuup.core.excs import (
     ProductNotOrderableProblem, ProductNotVisibleProblem
 )
 from shuup.core.fields import MoneyValueField, QuantityField, UnsavedForeignKey
-from shuup.core.signals import get_orderability_errors, get_visibility_errors
+from shuup.core.signals import (
+    get_orderability_errors, get_visibility_errors, post_clean, pre_clean
+)
 from shuup.core.utils import context_cache
 from shuup.utils.analog import define_log_model
+from shuup.utils.importing import cached_load
 from shuup.utils.properties import MoneyPropped, PriceProperty
 
 from ._product_media import ProductMediaKind
@@ -44,7 +48,7 @@ class ShopProductVisibility(Enum):
         ALWAYS_VISIBLE = _("always visible")
 
 
-class ShopProduct(MoneyPropped, models.Model):
+class ShopProduct(MoneyPropped, TranslatableModel):
     shop = models.ForeignKey("Shop", related_name="shop_products", on_delete=models.CASCADE, verbose_name=_("shop"))
     product = UnsavedForeignKey(
         "Product", related_name="shop_products", on_delete=models.CASCADE, verbose_name=_("product"))
@@ -166,6 +170,28 @@ class ShopProduct(MoneyPropped, models.Model):
         verbose_name=_("display unit"),
         help_text=_("Unit for displaying quantities of this product"))
 
+    translations = TranslatedFields(
+        name=models.CharField(
+            blank=True, null=True, max_length=256, verbose_name=_('name'),
+            help_text=_("Enter a descriptive name for your product. This will be its title in your store.")),
+        description=models.TextField(
+            blank=True, null=True, verbose_name=_('description'),
+            help_text=_(
+                "To make your product stand out, give it an awesome description. "
+                "This is what will help your shoppers learn about your products. "
+                "It will also help shoppers find them in the store and on the web."
+            )
+        ),
+        short_description=models.CharField(
+            blank=True, null=True, max_length=150, verbose_name=_('short description'),
+            help_text=_(
+                "Enter a short description for your product. "
+                "The short description will be used to get the attention of your "
+                "customer with a small but precise description of your product."
+            )
+        )
+    )
+
     class Meta:
         unique_together = (("shop", "product",),)
 
@@ -176,6 +202,7 @@ class ShopProduct(MoneyPropped, models.Model):
             supplier.module.update_stock(product_id=self.product.id)
 
     def clean(self):
+        pre_clean.send(type(self), instance=self)
         super(ShopProduct, self).clean()
         if self.display_unit:
             if self.display_unit.internal_unit != self.product.sales_unit:
@@ -183,6 +210,7 @@ class ShopProduct(MoneyPropped, models.Model):
                     "Invalid display unit: Internal unit of "
                     "the selected display unit does not match "
                     "with the sales unit of the product")})
+        post_clean.send(type(self), instance=self)
 
     def is_list_visible(self):
         """
@@ -296,7 +324,11 @@ class ShopProduct(MoneyPropped, models.Model):
         if self.product.mode == ProductMode.SIMPLE_VARIATION_PARENT:
             sellable = False
             for child_product in self.product.variation_children.all():
-                child_shop_product = child_product.get_shop_instance(self.shop)
+                try:
+                    child_shop_product = child_product.get_shop_instance(self.shop)
+                except ShopProduct.DoesNotExist:
+                    continue
+
                 if child_shop_product.is_orderable(
                         supplier=supplier,
                         customer=customer,
@@ -314,7 +346,11 @@ class ShopProduct(MoneyPropped, models.Model):
                 res = ProductVariationResult.resolve(self.product, combo["variable_to_value"])
                 if not res:
                     continue
-                child_shop_product = res.get_shop_instance(self.shop)
+                try:
+                    child_shop_product = res.get_shop_instance(self.shop)
+                except ShopProduct.DoesNotExist:
+                    continue
+
                 if child_shop_product.is_orderable(
                         supplier=supplier,
                         customer=customer,
@@ -347,6 +383,16 @@ class ShopProduct(MoneyPropped, models.Model):
             for error in supplier.get_orderability_errors(self, quantity, customer=customer):
                 yield error
 
+        for error in self.get_quantity_errors(quantity):
+            yield error
+
+        for receiver, response in get_orderability_errors.send(
+            ShopProduct, shop_product=self, customer=customer, supplier=supplier, quantity=quantity
+        ):
+            for error in response:
+                yield error
+
+    def get_quantity_errors(self, quantity):
         purchase_multiple = self.purchase_multiple
         if quantity > 0 and purchase_multiple > 0 and (quantity % purchase_multiple) != 0:
             p = (quantity // purchase_multiple)
@@ -369,12 +415,6 @@ class ShopProduct(MoneyPropped, models.Model):
                         larger_amount=render_qty(larger_p))
             yield ValidationError(message, code="invalid_purchase_multiple")
 
-        for receiver, response in get_orderability_errors.send(
-            ShopProduct, shop_product=self, customer=customer, supplier=supplier, quantity=quantity
-        ):
-            for error in response:
-                yield error
-
     def raise_if_not_orderable(self, supplier, customer, quantity, ignore_minimum=False):
         for message in self.get_orderability_errors(
             supplier=supplier, quantity=quantity, customer=customer, ignore_minimum=ignore_minimum
@@ -393,7 +433,8 @@ class ShopProduct(MoneyPropped, models.Model):
             return val
 
         if not supplier:
-            supplier = self.suppliers.first()  # TODO: Allow multiple suppliers
+            supplier = self.get_supplier(customer, quantity)
+
         for message in self.get_orderability_errors(supplier=supplier, quantity=quantity, customer=customer):
             if customer:
                 context_cache.set_cached_value(key, False)
@@ -478,6 +519,16 @@ class ShopProduct(MoneyPropped, models.Model):
     @property
     def public_images(self):
         return self.images.filter(public=True)
+
+    def get_supplier(self, customer=None, quantity=None, shipping_address=None):
+        supplier_strategy = cached_load("SHUUP_SHOP_PRODUCT_SUPPLIERS_STRATEGY")
+        kwargs = {
+            "shop_product": self,
+            "customer": customer,
+            "quantity": quantity,
+            "shipping_address": shipping_address
+        }
+        return supplier_strategy().get_supplier(**kwargs)
 
 
 ShopProductLogEntry = define_log_model(ShopProduct)

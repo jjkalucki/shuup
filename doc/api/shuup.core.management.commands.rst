@@ -28,6 +28,14 @@ shuup.core.management.commands.shuup_extract_products_shortdescription module
     :undoc-members:
     :show-inheritance:
 
+shuup.core.management.commands.shuup_fix_order_status_identifiers module
+------------------------------------------------------------------------
+
+.. automodule:: shuup.core.management.commands.shuup_fix_order_status_identifiers
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 shuup.core.management.commands.shuup_init module
 ------------------------------------------------
 
@@ -40,14 +48,6 @@ shuup.core.management.commands.shuup_makemessages module
 --------------------------------------------------------
 
 .. automodule:: shuup.core.management.commands.shuup_makemessages
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-shuup.core.management.commands.shuup_makemigrations module
-----------------------------------------------------------
-
-.. automodule:: shuup.core.management.commands.shuup_makemigrations
     :members:
     :undoc-members:
     :show-inheritance:

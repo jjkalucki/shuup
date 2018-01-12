@@ -69,7 +69,7 @@ SHUUP_PRICING_MODULE = "customer_group_pricing"
 #:
 #: Each discount module may change the price of a product.  See
 #: `shuup.core.pricing.DiscountModule` for details.
-SHUUP_DISCOUNT_MODULES = ["catalog_campaigns"]
+SHUUP_DISCOUNT_MODULES = ["catalog_campaigns", "customer_group_discount"]
 
 #: List of identifiers of order source modifier modules.
 #:
@@ -92,8 +92,17 @@ SHUUP_ENABLE_ATTRIBUTES = True
 SHUUP_ENABLE_MULTIPLE_SHOPS = False
 
 #: Whether multiple suppliers are enabled in this installation.
-#: Enabling this flag prevents supplier creation from admin.
+#: Enabling this flag allows supplier creation from admin.
 SHUUP_ENABLE_MULTIPLE_SUPPLIERS = False
+
+#: Indicates whether Shuup should restrict Contact access per Shop
+#:
+#: This is useful when multi-shop is in use and the contact shouldn't
+#: be visible by other shops.
+#:
+#: The contact will be visible for shops in which user registered or
+#: placed an order.
+SHUUP_MANAGE_CONTACTS_PER_SHOP = False
 
 #: A list of order labels (2-tuples of internal identifier / visible name).
 #:
@@ -170,13 +179,19 @@ SHUUP_ADDRESS_MODEL_FORM = (
     "shuup.core.utils.forms.MutableAddressForm")
 
 #: A dictionary defining properties to override the default field properties of the
-#: checkout address form. Should map the field name (as a string) to a dictionary
-#: containing the overriding Django form field properties, as in the following
+#: checkout address form and also the Address API.
+#:  Should map the field name (as a string) to a dictionary containing the overriding
+#:  Django form field properties, as in the following
 #: example which makes the postal code a required field:
 #:
 #: SHUUP_ADDRESS_FIELD_PROPERTIES = {
 #:    "postal_code": {"required": True}
 #: }
+#:
+#: Some of the Django form field properties will not affect Address API.
+#: The valid set of properties are those defined by the Serializer fields core arguments
+#: like read_only, required, allow_null, etc. See the Django Rest Framework documentation
+#: for more properties.
 #:
 #: It should be noted, however, that overriding some settings (such as making a
 #: required field non-required) could create other validation issues.
@@ -213,3 +228,15 @@ SHUUP_AUTO_SHOP_PRODUCT_CATEGORIES = True
 #: If no handler is set (blank), Shuup will use default Django's handlers.
 #:
 SHUUP_ERROR_PAGE_HANDLERS_SPEC = []
+
+#: Spec which defines shop product supplier strategy
+#: Used to determine how the supplier is selected for source line and orderability checks.
+#:
+#: This spec defines class which should implement `get_supplier`-method for which
+#: the current shop product with customer, quantity and shipping address is passed as kwargs.
+SHUUP_SHOP_PRODUCT_SUPPLIERS_STRATEGY = (
+    "shuup.core.suppliers.FirstSupplierStrategy")
+
+#: Spec which provides the current shop for a given request and set of parameters.
+SHUUP_REQUEST_SHOP_PROVIDER_SPEC = (
+    "shuup.core.shop_provider.DefaultShopProvider")

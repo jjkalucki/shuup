@@ -10,19 +10,36 @@ import datetime
 import pytest
 from django.contrib.auth import get_user_model
 
+from shuup.admin.modules.products.views import ProductListView
+from shuup.admin.modules.settings.view_settings import ViewSettings
 from shuup.admin.utils.picotable import (
-    ChoicesFilter, Column, DateRangeFilter, Filter, MultiFieldTextFilter,
-    Picotable, RangeFilter, TextFilter, MPTTFilter
+    ChoicesFilter, Column, DateRangeFilter, Filter, MPTTFilter,
+    MultiFieldTextFilter, Picotable, RangeFilter, TextFilter
 )
-from shuup.core.models import Product, Category
+from shuup.apps.provides import override_provides
+from shuup.core.models import Category, Product, ShopProduct
+from shuup.testing.factories import get_default_shop
 from shuup.testing.mock_population import populate_if_required
+from shuup.testing.utils import apply_request_middleware
 from shuup_tests.utils import empty_iterable
 from shuup_tests.utils.fixtures import regular_user
 
 
 class PicoContext(object):
+    def __init__(self, request):
+        self.request = request
+
     def superuser_display(self, instance):  # Test indirect `display` callable
         return "very super" if instance.is_superuser else "-"
+
+
+class CustomProductDataColumn(object):
+    def get_custom_product_info_display(self, shop_product):
+        return "product-data-%d" % shop_product.pk
+
+    def get_column(self, model, known_names, identifier):
+        return Column("custom_product_info", u"CustomProductInfo", display="get_custom_product_info_display")
+
 
 def instance_id(instance):  # Test direct `display` callable
     return instance.id
@@ -31,6 +48,7 @@ def false_and_true():
     return [(False, "False"), (True, "True")]
 
 def get_pico(rf, model=None, columns=None):
+    get_default_shop()
     model = model or get_user_model()
     columns = columns or [
         Column("id", "Id", filter_config=Filter(), display=instance_id),
@@ -41,12 +59,13 @@ def get_pico(rf, model=None, columns=None):
         Column("date_joined", "Date Joined", filter_config=DateRangeFilter())
     ]
 
+    request = apply_request_middleware(rf.get("/"))
     return Picotable(
-        request=rf.get("/"),
+        request=request,
         columns=columns,
         mass_actions=[],
         queryset=model.objects.all(),
-        context=PicoContext()
+        context=PicoContext(request)
     )
 
 
@@ -230,3 +249,12 @@ def test_mptt_filter(rf):
 
     data = pico.get_data({"perPage": 100, "page": 1, "filters": {"name": child_category.id}})
     assert len(data["items"]) == 1
+
+
+@pytest.mark.django_db
+def test_provide_columns():
+    with override_provides("provided_columns_ShopProduct", [
+            "shuup_tests.admin.test_picotable:CustomProductDataColumn"]):
+        view_settings = ViewSettings(ShopProduct, ProductListView.default_columns, ProductListView)
+        column_ids = [col.id for col in view_settings.inactive_columns]  # provided column is not set active yet
+        assert "custom_product_info" in column_ids

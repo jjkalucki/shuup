@@ -37,8 +37,10 @@ from shuup.core.fields import (
     UnsavedForeignKey
 )
 from shuup.core.pricing import TaxfulPrice, TaxlessPrice
+from shuup.core.settings_provider import ShuupSettings
 from shuup.core.signals import (
-    payment_created, refund_created, shipment_created
+    payment_created, refund_created, shipment_created,
+    shipment_created_and_processed
 )
 from shuup.utils.analog import define_log_model, LogEntryKind
 from shuup.utils.dates import local_now, to_aware
@@ -90,25 +92,25 @@ class OrderStatusRole(Enum):
     class Labels:
         NONE = _('none')
         INITIAL = _('Initial')
-        PROCESSING = _('Processing')
         COMPLETE = _('Complete')
         CANCELED = _('Canceled')
+        PROCESSING = _('Processing')
 
 
 class DefaultOrderStatus(Enum):
     NONE = "none"
     INITIAL = "initial"
-    COMPLETE = "processing"
-    CANCELED = "complete"
-    PROCESSING = "canceled"
+    COMPLETE = "complete"
+    CANCELED = "canceled"
+    PROCESSING = "processing"
     # TODO: Failed state?
 
     class Labels:
         NONE = _('none')
         INITIAL = _('Received')
-        PROCESSING = _('In Progress')
         COMPLETE = _('Complete')
         CANCELED = _('Canceled')
+        PROCESSING = _('In Progress')
 
 
 class OrderStatusQuerySet(TranslatableQuerySet):
@@ -261,7 +263,7 @@ class OrderQuerySet(models.QuerySet):
         return self.filter(payment_status=PaymentStatus.FULLY_PAID)
 
     def incomplete(self):
-        return self.filter(status__role__in=(OrderStatusRole.NONE, OrderStatusRole.INITIAL))
+        return self.filter(status__role__in=(OrderStatusRole.NONE, OrderStatusRole.INITIAL, OrderStatusRole.PROCESSING))
 
     def complete(self):
         return self.filter(status__role=OrderStatusRole.COMPLETE)    # TODO: read status
@@ -295,8 +297,8 @@ class OrderQuerySet(models.QuerySet):
 class Order(MoneyPropped, models.Model):
     # Identification
     shop = UnsavedForeignKey("Shop", on_delete=models.PROTECT, verbose_name=_('shop'))
-    created_on = models.DateTimeField(auto_now_add=True, editable=False, verbose_name=_('created on'))
-    modified_on = models.DateTimeField(auto_now_add=True, editable=False, verbose_name=_('modified on'))
+    created_on = models.DateTimeField(auto_now_add=True, editable=False, db_index=True, verbose_name=_('created on'))
+    modified_on = models.DateTimeField(auto_now=True, editable=False, db_index=True, verbose_name=_('modified on'))
     identifier = InternalIdentifierField(unique=True, db_index=True, verbose_name=_('order identifier'))
     # TODO: label is actually a choice field, need to check migrations/choice deconstruction
     label = models.CharField(max_length=32, db_index=True, verbose_name=_('label'))
@@ -386,7 +388,7 @@ class Order(MoneyPropped, models.Model):
     # Other
     ip_address = models.GenericIPAddressField(null=True, blank=True, verbose_name=_('IP address'))
     # order_date is not `auto_now_add` for backdating purposes
-    order_date = models.DateTimeField(editable=False, verbose_name=_('order date'))
+    order_date = models.DateTimeField(editable=False, db_index=True, verbose_name=_('order date'))
     payment_date = models.DateTimeField(null=True, editable=False, verbose_name=_('payment date'))
 
     language = LanguageField(blank=True, verbose_name=_('language'))
@@ -410,7 +412,7 @@ class Order(MoneyPropped, models.Model):
             name = self.billing_address.name
         else:
             name = "-"
-        if settings.SHUUP_ENABLE_MULTIPLE_SHOPS:
+        if ShuupSettings.get_setting("SHUUP_ENABLE_MULTIPLE_SHOPS"):
             return "Order %s (%s, %s)" % (self.identifier, self.shop.name, name)
         else:
             return "Order %s (%s)" % (self.identifier, name)
@@ -662,6 +664,7 @@ class Order(MoneyPropped, models.Model):
         self.add_log_entry(_(u"Shipment #%d created.") % shipment.id)
         self.update_shipping_status()
         shipment_created.send(sender=type(self), order=self, shipment=shipment)
+        shipment_created_and_processed.send(sender=type(self), order=self, shipment=shipment)
         return shipment
 
     def can_create_refund(self):
@@ -824,12 +827,14 @@ class Order(MoneyPropped, models.Model):
         self.update_payment_status()
         refund_created.send(sender=type(self), order=self, refund_lines=refund_lines)
 
-    def create_full_refund(self, restock_products=False):
+    def create_full_refund(self, restock_products=False, created_by=None):
         """
         Create a full for entire order contents, with the option of
         restocking stocked products.
 
         :param restock_products: Boolean indicating whether to restock products
+        :param created_by: Refund creator's user instance, used for
+                           adjusting supplier stock.
         :type restock_products: bool|False
         """
         if self.has_refunds():
@@ -841,7 +846,7 @@ class Order(MoneyPropped, models.Model):
             "amount": line.taxful_price.amount,
             "restock_products": restock_products
         } for line in self.lines.all() if line.type != OrderLineType.REFUND]
-        self.create_refund(line_data)
+        self.create_refund(line_data, created_by)
 
     def get_total_refunded_amount(self):
         total = sum([line.taxful_price.amount.value for line in self.lines.refunds()])
@@ -852,6 +857,11 @@ class Order(MoneyPropped, models.Model):
 
     def get_total_unrefunded_quantity(self):
         return sum([line.max_refundable_quantity for line in self.lines.all()])
+
+    def get_total_tax_amount(self):
+        return sum(
+            (line.tax_amount for line in self.lines.all()),
+            Money(0, self.currency))
 
     def has_refunds(self):
         return self.lines.refunds().exists()
@@ -1081,6 +1091,36 @@ class Order(MoneyPropped, models.Model):
         for attr in name_attrs:
             if getattr(self, "%s_id" % attr):
                 return getattr(self, attr).name
+
+    def get_available_shipping_methods(self):
+        """
+        Get available shipping methods.
+
+        :rtype: list[ShippingMethod]
+        """
+        from shuup.core.models import ShippingMethod
+
+        product_ids = self.lines.products().values_list("id", flat=True)
+        return [
+            m for m
+            in ShippingMethod.objects.available(shop=self.shop, products=product_ids)
+            if m.is_available_for(self)
+        ]
+
+    def get_available_payment_methods(self):
+        """
+        Get available payment methods.
+
+        :rtype: list[PaymentMethod]
+        """
+        from shuup.core.models import PaymentMethod
+
+        product_ids = self.lines.products().values_list("id", flat=True)
+        return [
+            m for m
+            in PaymentMethod.objects.available(shop=self.shop, products=product_ids)
+            if m.is_available_for(self)
+        ]
 
 
 OrderLogEntry = define_log_model(Order)

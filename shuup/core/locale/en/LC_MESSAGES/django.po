@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2017-03-18 09:48+0000\n"
+"POT-Creation-Date: 2018-01-05 22:28+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: en <LL@li.org>\n"
@@ -18,10 +18,31 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1)\n"
 "Generated-By: Babel 2.1.1\n"
 
+msgid "Mutable Address"
+msgstr ""
+
+msgid "Mutable Addressess can be fetched, created, updated and deleted."
+msgstr ""
+
 msgid "Attributes"
 msgstr ""
 
 msgid "Attributes can be listed, fetched, created, updated and deleted."
+msgstr ""
+
+msgid "Basket"
+msgstr ""
+
+msgid ""
+"Basket items can be listed, added, removed and cleaned. Also campaign codes "
+"can be added."
+msgstr ""
+
+#, python-brace-format
+msgid "Product {product} is not available in {shop}"
+msgstr ""
+
+msgid "Custom Price"
 msgstr ""
 
 msgid "Category"
@@ -36,16 +57,58 @@ msgstr ""
 msgid "Contacts can be listed, fetched, created, updated and deleted."
 msgstr ""
 
+msgid "Person Contact"
+msgstr ""
+
+msgid "Person Contacts can be listed, fetched, created, updated and deleted."
+msgstr ""
+
+msgid "Front Orders"
+msgstr ""
+
+msgid "Retrieve and list the current users orders."
+msgstr ""
+
+msgid "Storefront Shop Products"
+msgstr ""
+
+msgid "Storefront shop products can be listed and fetched."
+msgstr ""
+
+msgid "Storefront Products"
+msgstr ""
+
+msgid "Storefront products can be listed and fetched."
+msgstr ""
+
+msgid "Front Users"
+msgstr ""
+
+msgid ""
+"Users can register to the storefront and fetch and update their own user "
+"details."
+msgstr ""
+
 msgid "Manufacturer"
 msgstr ""
 
 msgid "Manufacturers can be listed, fetched, created, updated and deleted."
 msgstr ""
 
+#, python-brace-format
+msgid "Order status changed: {from_status} to {to_status}"
+msgstr ""
+
 msgid "Orders"
 msgstr ""
 
 msgid "Orders can be listed, fetched, created, updated and canceled."
+msgstr ""
+
+msgid "Order is already fully paid"
+msgstr ""
+
+msgid "Payment created"
 msgstr ""
 
 msgid "Product Media"
@@ -100,6 +163,15 @@ msgstr ""
 msgid "Products package links can be fetched, updated and deleted."
 msgstr ""
 
+msgid "Order can not be refunded at the moment."
+msgstr ""
+
+msgid "Can not refund line."
+msgstr ""
+
+msgid "Refund created."
+msgstr ""
+
 msgid "Shipments"
 msgstr ""
 
@@ -115,7 +187,15 @@ msgstr ""
 msgid "Suppliers"
 msgstr ""
 
-msgid "Suppliers can be listed and fetched and stock can be updated."
+msgid ""
+"Suppliers can be listed, fetched, created, updated and deleted. Stocks can "
+"be updated."
+msgstr ""
+
+msgid "Tax"
+msgstr ""
+
+msgid "Taxes can be listed, fetched, created, updated and deleted."
 msgstr ""
 
 msgid "Tax Class"
@@ -136,6 +216,57 @@ msgstr ""
 msgid "Users can be listed, fetched, created, updated and deleted."
 msgstr ""
 
+#, python-format
+msgid "Invalid command %s"
+msgstr ""
+
+#, python-format
+msgid "The quantity %f is not allowed. Please use an integer value."
+msgstr ""
+
+#, python-format
+msgid "The quantity %s is not valid."
+msgstr ""
+
+msgid "This variation is not available."
+msgstr ""
+
+msgid "Customer is not active."
+msgstr ""
+
+msgid "Shop does not have permission for this customer."
+msgstr ""
+
+msgid "You don't have the required permission to assign this customer."
+msgstr ""
+
+msgid "You must specify the order when customer is a company."
+msgstr ""
+
+msgid "Invalid customer."
+msgstr ""
+
+msgid "Orderer is not member of the company."
+msgstr ""
+
+msgid "You are not member of the company."
+msgstr ""
+
+#, python-format
+msgid "Basket loading failed: Incompatible basket (%s)"
+msgstr ""
+
+msgid "Try to remove some products from the basket and order them separately."
+msgstr ""
+
+#, python-format
+msgid "Products in basket cannot be shipped together. %s"
+msgstr ""
+
+#, python-format
+msgid "Products in basket have no common payment method. %s"
+msgstr ""
+
 msgid "internal identifier"
 msgstr ""
 
@@ -143,6 +274,9 @@ msgid "Do not change this value if you are not sure what you are doing."
 msgstr ""
 
 msgid "Error"
+msgstr ""
+
+msgid "No shop!"
 msgstr ""
 
 msgid "shipping address"
@@ -361,13 +495,67 @@ msgstr ""
 msgid "The following fields can not be changed"
 msgstr ""
 
+msgid "key"
+msgstr ""
+
+msgid "shop"
+msgstr ""
+
+msgid "customer"
+msgstr ""
+
+msgid "orderer"
+msgstr ""
+
+msgid "creator"
+msgstr ""
+
+msgid "created on"
+msgstr ""
+
+msgid "updated on"
+msgstr ""
+
+msgid "persistent"
+msgstr ""
+
+msgid "deleted"
+msgstr ""
+
+msgid "finished"
+msgstr ""
+
+msgid "data"
+msgstr ""
+
+msgid "taxless total price"
+msgstr ""
+
+msgid "taxful total price"
+msgstr ""
+
+msgid "currency"
+msgstr ""
+
+msgid "prices include tax"
+msgstr ""
+
+msgid "product_count"
+msgstr ""
+
+msgid "products"
+msgstr ""
+
+msgid "basket"
+msgstr ""
+
+msgid "baskets"
+msgstr ""
+
 msgid "invisible"
 msgstr ""
 
 msgid "visible"
-msgstr ""
-
-msgid "deleted"
 msgstr ""
 
 msgid "visible to all"
@@ -459,12 +647,6 @@ msgstr ""
 msgid "categories"
 msgstr ""
 
-msgid "shop"
-msgstr ""
-
-msgid "key"
-msgstr ""
-
 msgid "value"
 msgstr ""
 
@@ -508,13 +690,16 @@ msgstr ""
 msgid "Can't delete. This object is protected."
 msgstr ""
 
-msgid "created on"
+msgid "modified on"
 msgstr ""
 
 msgid "active"
 msgstr ""
 
 msgid "Check this if the contact is an active customer."
+msgstr ""
+
+msgid "Inform which shops have access to this contact."
 msgstr ""
 
 msgid "default shipping method"
@@ -684,9 +869,6 @@ msgstr ""
 msgid "Enter a valid ISO-4217 currency code"
 msgstr ""
 
-msgid "currency"
-msgstr ""
-
 msgid "currencies"
 msgstr ""
 
@@ -820,13 +1002,13 @@ msgstr ""
 msgid "Initial"
 msgstr ""
 
-msgid "Processing"
-msgstr ""
-
 msgid "Complete"
 msgstr ""
 
 msgid "Canceled"
+msgstr ""
+
+msgid "Processing"
 msgstr ""
 
 msgid "Received"
@@ -873,9 +1055,6 @@ msgstr ""
 msgid "order statuses"
 msgstr ""
 
-msgid "modified on"
-msgstr ""
-
 msgid "order identifier"
 msgstr ""
 
@@ -883,12 +1062,6 @@ msgid "label"
 msgstr ""
 
 msgid "reference number"
-msgstr ""
-
-msgid "customer"
-msgstr ""
-
-msgid "orderer"
 msgstr ""
 
 msgid "email address"
@@ -928,9 +1101,6 @@ msgid "grand total"
 msgstr ""
 
 msgid "taxless total"
-msgstr ""
-
-msgid "prices include tax"
 msgstr ""
 
 msgid "display currency"
@@ -1013,9 +1183,6 @@ msgid "module"
 msgstr ""
 
 msgid "time"
-msgstr ""
-
-msgid "data"
 msgstr ""
 
 msgid "cache entry"
@@ -1233,6 +1400,26 @@ msgid "display unit"
 msgstr ""
 
 msgid "Unit for displaying quantities of this product"
+msgstr ""
+
+msgid ""
+"Enter a descriptive name for your product. This will be its title in your "
+"store."
+msgstr ""
+
+msgid ""
+"To make your product stand out, give it an awesome description. This is what "
+"will help your shoppers learn about your products. It will also help "
+"shoppers find them in the store and on the web."
+msgstr ""
+
+msgid "short description"
+msgstr ""
+
+msgid ""
+"Enter a short description for your product. The short description will be "
+"used to get the attention of your customer with a small but precise "
+"description of your product."
 msgstr ""
 
 msgid ""
@@ -1499,26 +1686,6 @@ msgid ""
 msgstr ""
 
 msgid ""
-"Enter a descriptive name for your product. This will be its title in your "
-"store."
-msgstr ""
-
-msgid ""
-"To make your product stand out, give it an awesome description. This is what "
-"will help your shoppers learn about your products. It will also help "
-"shoppers find them in the store and on the web."
-msgstr ""
-
-msgid "short description"
-msgstr ""
-
-msgid ""
-"Enter a short description for your product. The short description will be "
-"used to get the attention of your customer with a small but precise "
-"description of your product."
-msgstr ""
-
-msgid ""
 "Enter a URL Slug for your product. This is what your product page URL will "
 "be. A default will be created using the product name."
 msgstr ""
@@ -1547,9 +1714,6 @@ msgstr ""
 msgid ""
 "You can enter a name for the variation of your product. This could be for "
 "example different colors or versions."
-msgstr ""
-
-msgid "products"
 msgstr ""
 
 msgid ""
@@ -2011,6 +2175,9 @@ msgstr ""
 msgid "module data"
 msgstr ""
 
+msgid "You can select which shops the supplier is available to."
+msgstr ""
+
 msgid "Cannot change business critical fields of Tax that is in use"
 msgstr ""
 
@@ -2214,6 +2381,18 @@ msgid "This field cannot be changed since it is protected."
 msgstr ""
 
 msgid "Region"
+msgstr ""
+
+msgid "Username"
+msgstr ""
+
+msgid "Email"
+msgstr ""
+
+msgid "Please provide either username or email, not both."
+msgstr ""
+
+msgid "Please provide either username or email."
 msgstr ""
 
 msgid "First Last"

@@ -19,6 +19,7 @@ from parler.models import TranslatableModel, TranslatedFields
 
 from shuup.core.excs import ImpossibleProductModeException
 from shuup.core.fields import InternalIdentifierField, MeasurementField
+from shuup.core.signals import post_clean, pre_clean
 from shuup.core.taxing import TaxableItem
 from shuup.core.utils import context_cache
 from shuup.core.utils.slugs import generate_multilanguage_slugs
@@ -183,8 +184,10 @@ class ProductQuerySet(TranslatableQuerySet):
         from ._product_shops import ShopProductVisibility
         return self._get_qs(shop, customer, language, ShopProductVisibility.SEARCHABLE)
 
-    def all_except_deleted(self, language=None):
+    def all_except_deleted(self, language=None, shop=None):
         qs = (self.language(language) if language else self).exclude(deleted=True)
+        if shop:
+            qs = qs.filter(shop_products__shop=shop)
         qs = qs.select_related(*Product.COMMON_SELECT_RELATED)
         return qs
 
@@ -194,7 +197,7 @@ class Product(TaxableItem, AttributableMixin, TranslatableModel):
     COMMON_SELECT_RELATED = ("type", "primary_image", "tax_class")
 
     # Metadata
-    created_on = models.DateTimeField(auto_now_add=True, editable=False, verbose_name=_('created on'))
+    created_on = models.DateTimeField(auto_now_add=True, editable=False, db_index=True, verbose_name=_('created on'))
     modified_on = models.DateTimeField(auto_now=True, editable=False, verbose_name=_('modified on'))
     deleted = models.BooleanField(default=False, editable=False, db_index=True, verbose_name=_('deleted'))
 
@@ -382,8 +385,7 @@ class Product(TaxableItem, AttributableMixin, TranslatableModel):
             identifier="shop_product", item=self, context={"shop": shop}, allow_cache=allow_cache)
         if val is not None:
             return val
-
-        shop_inst = self.shop_products.get(shop=shop)
+        shop_inst = self.shop_products.get(shop_id=shop.id)
         context_cache.set_cached_value(key, shop_inst)
         return shop_inst
 
@@ -396,11 +398,17 @@ class Product(TaxableItem, AttributableMixin, TranslatableModel):
           List of products and their price infos sorted from cheapest to
           most expensive.
         """
-        priced_children = (
-            (child, child.get_price_info(context, quantity=quantity))
-            for child in self.variation_children.all()
-            if child.get_shop_instance(context.shop).is_orderable(supplier=None, customer=context.customer, quantity=1)
-        )
+        from shuup.core.models import ShopProduct
+        priced_children = []
+        for child in self.variation_children.all():
+            try:
+                shop_product = child.get_shop_instance(context.shop)
+            except ShopProduct.DoesNotExist:
+                continue
+
+            if shop_product.is_orderable(supplier=None, customer=context.customer, quantity=1):
+                priced_children.append((child, child.get_price_info(context, quantity=quantity)))
+
         return sorted(priced_children, key=(lambda x: x[1].price))
 
     def get_cheapest_child_price(self, context, quantity=1):
@@ -554,11 +562,17 @@ class Product(TaxableItem, AttributableMixin, TranslatableModel):
         return getattr(translation, "name", self.sku)
 
     def save(self, *args, **kwargs):
+        self.clean()
         if self.net_weight and self.net_weight > 0:
             self.gross_weight = max(self.net_weight, self.gross_weight)
         rv = super(Product, self).save(*args, **kwargs)
         generate_multilanguage_slugs(self, self._get_slug_name)
         return rv
+
+    def clean(self):
+        pre_clean.send(type(self), instance=self)
+        super(Product, self).clean()
+        post_clean.send(type(self), instance=self)
 
     def delete(self, using=None):
         raise NotImplementedError("Not implemented: Use `soft_delete()` for products.")

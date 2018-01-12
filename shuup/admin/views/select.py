@@ -17,7 +17,9 @@ from django.utils.encoding import force_text
 from django.utils.translation import ugettext_lazy as _
 from django.views.generic import TemplateView
 
-from shuup.core.models import Carrier, Contact, Product
+from shuup.core.models import (
+    Carrier, Contact, Product, ProductMode, ShopProduct
+)
 
 
 def _field_exists(model, field):
@@ -72,22 +74,51 @@ class MultiselectAjaxView(TemplateView):
         model_name = request.GET.get("model")
         if not model_name:
             return []
+
         cls = apps.get_model(model_name)
         qs = cls.objects.all()
-        if hasattr(cls.objects, "all_except_deleted"):
-            qs = cls.objects.all_except_deleted()
+        shop = self.request.shop
+        qs = self._filter_query(cls, qs, shop)
         self.init_search_fields(cls)
         if not self.search_fields:
             return [{"id": None, "name": _("Couldn't get selections for %s.") % model_name}]
+
         if request.GET.get("search"):
             query = Q()
             keyword = request.GET.get("search", "").strip()
             for field in self.search_fields:
                 query |= Q(**{"%s__icontains" % field: keyword})
+
             if issubclass(cls, Contact) or issubclass(cls, get_user_model()):
                 query &= Q(is_active=True)
-            qs = qs.filter(query).distinct()
+
+            qs = qs.filter(query)
+
+        search_mode = request.GET.get("searchMode")
+        if search_mode and search_mode == "main" and issubclass(cls, Product):
+            qs = qs.filter(mode__in=[
+                ProductMode.SIMPLE_VARIATION_PARENT,
+                ProductMode.VARIABLE_VARIATION_PARENT,
+                ProductMode.NORMAL
+            ])
+
+        qs = qs.distinct()
         return [{"id": obj.id, "name": force_text(obj)} for obj in qs[:self.result_limit]]
+
+    def _filter_query(self, cls, qs, shop):
+        if hasattr(cls.objects, "all_except_deleted"):
+            qs = cls.objects.all_except_deleted(shop=shop)
+        if hasattr(cls.objects, "get_for_user"):
+            qs = cls.objects.get_for_user(self.request.user)
+        if issubclass(cls, Product):
+            qs = qs.filter(shop_products__shop=shop)
+        if issubclass(cls, ShopProduct):
+            qs = qs.filter(shop=shop)
+        if hasattr(cls.objects, "shop"):
+            qs = qs.filter(shop=shop)
+        if hasattr(cls.objects, "shops"):
+            qs = qs.filter(shops__in=[shop])
+        return qs
 
     def get(self, request, *args, **kwargs):
         return JsonResponse({"results": self.get_data(request, *args, **kwargs)})

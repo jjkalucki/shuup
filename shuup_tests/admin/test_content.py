@@ -18,9 +18,7 @@ from shuup.admin.modules.content.forms import (
     ContentWizardForm
 )
 from shuup.admin.utils import wizard
-from shuup.admin.views.dashboard import DashboardView
 from shuup.admin.views.wizard import WizardView
-from shuup.core.models import Shop
 from shuup.notify.actions.email import SendEmail
 from shuup.notify.models import Script
 from shuup.notify.script import StepNext
@@ -169,6 +167,7 @@ def test_content_form(settings):
     assert SavedViewConfig.objects.count() == 1
     svc = SavedViewConfig.objects.first()
     assert configuration.get(shop, CONTENT_FOOTER_KEY) == svc.pk
+    assert svc.shop == shop
     assert svc.view_name == XTHEME_GLOBAL_VIEW_NAME
     assert svc.status == SavedViewConfigStatus.PUBLIC
     content = loader.render_to_string(data.FOOTER_TEMPLATE, context).strip()
@@ -290,7 +289,7 @@ def test_content_wizard_pane(rf, admin_user, settings):
     request = apply_request_middleware(rf.get("/"))
     response = WizardView.as_view()(request)
     assert response.status_code == 302
-    assert response["Location"] == reverse("shuup_admin:dashboard")
+    assert response["Location"].startswith(reverse("shuup:login"))
 
     # add the simple cms - create only the pages and footer
     settings.INSTALLED_APPS.append("shuup.simple_cms")
@@ -315,7 +314,6 @@ def test_content_wizard_pane(rf, admin_user, settings):
     assert Script.objects.count() == 0
     settings.INSTALLED_APPS.remove("shuup.xtheme")
     SavedViewConfig.objects.all().delete()
-
 
     # add the notify - create only the notification
     settings.INSTALLED_APPS.append("shuup.notify")

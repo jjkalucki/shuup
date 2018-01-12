@@ -44,7 +44,6 @@ def create_basket_and_campaign(request, conditions, product_price_value, campaig
     assert basket.product_count == 1
     original_price = basket.total_price
 
-
     campaign = BasketCampaign.objects.create(
         shop=request.shop, name="test", public_name="test", active=True)
     BasketDiscountAmount.objects.create(campaign=campaign, discount_amount=campaign_discount_value)
@@ -107,7 +106,7 @@ def test_group_basket_condition_with_anonymous_contact(rf):
 
 @pytest.mark.django_db
 def test_contact_group_basket_condition_with_none(rf):
-    request = rf.get("/")
+    request = apply_request_middleware(rf.get("/"))
     request.shop = Shop()
     basket = get_basket(request)
     condition = ContactGroupBasketCondition.objects.create()

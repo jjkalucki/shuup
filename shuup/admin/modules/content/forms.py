@@ -120,6 +120,8 @@ class ContentWizardForm(forms.Form):
 
     def __init__(self, **kwargs):
         self.shop = kwargs.pop("shop")
+        if not self.shop:
+            raise ValueError("No shop provided")
         super(ContentWizardForm, self).__init__(**kwargs)
 
         if djangoenv.has_installed("shuup.simple_cms"):
@@ -266,7 +268,7 @@ class ContentWizardForm(forms.Form):
     def _handle_xtheme_save(self):
         svc_pk = config.get(self.shop, CONTENT_FOOTER_KEY)
         svc = SavedViewConfig.objects.filter(pk=svc_pk).first()
-        theme = get_current_theme()
+        theme = get_current_theme(self.shop)
 
         if not svc and theme:
             context = {"shop": self.shop}
@@ -279,6 +281,7 @@ class ContentWizardForm(forms.Form):
 
             svc = SavedViewConfig(
                 theme_identifier=theme.identifier,
+                shop=self.shop,
                 view_name=XTHEME_GLOBAL_VIEW_NAME,
                 status=SavedViewConfigStatus.CURRENT_DRAFT
             )

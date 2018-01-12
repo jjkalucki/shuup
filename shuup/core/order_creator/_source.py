@@ -24,7 +24,7 @@ from shuup.core import taxing
 from shuup.core.fields.utils import ensure_decimal_places
 from shuup.core.models import (
     AnonymousContact, OrderStatus, PaymentMethod, Product, ShippingMethod,
-    ShippingMode, Shop, Supplier, TaxClass
+    ShippingMode, Shop, ShopProduct, Supplier, TaxClass
 )
 from shuup.core.pricing import Price, Priceful, TaxfulPrice, TaxlessPrice
 from shuup.core.taxing import should_calculate_taxes_automatically, TaxableItem
@@ -167,7 +167,7 @@ class OrderSource(object):
             modified_by=order.modified_by,
             payment_method_id=order.payment_method_id,
             shipping_method_id=order.shipping_method_id,
-            customer_comment=order.customer_comment,
+            customer_comment=(order.customer_comment if order.customer_comment else ""),
             marketing_permission=order.marketing_permission,
             language=order.language,
             display_currency=order.display_currency,
@@ -194,6 +194,8 @@ class OrderSource(object):
     taxless_total_discount_or_none = taxless_total_discount.or_none
 
     total_price_of_products = _PriceSum("price", "get_product_lines")
+    taxful_total_price_of_products = _PriceSum("taxful_price", "get_product_lines")
+    taxless_total_price_of_products = _PriceSum("taxless_price", "get_product_lines")
 
     @property
     def customer(self):
@@ -521,7 +523,7 @@ class OrderSource(object):
         for error_message in self.get_validation_errors():
             raise ValidationError(error_message.args[0], code="invalid_order_source")
 
-    def get_validation_errors(self):
+    def get_validation_errors(self):  # noqa (C901)
         # check for the minimum sum of order total
         min_total = configuration.get(self.shop, ORDER_MIN_TOTAL_CONFIG_KEY, Decimal(0))
         total = (self.taxful_total_price.value if self.shop.prices_include_tax else self.taxless_total_price.value)
@@ -543,12 +545,14 @@ class OrderSource(object):
 
         for supplier in self._get_suppliers():
             for product, quantity in iteritems(self._get_products_and_quantities(supplier)):
-                shop_product = product.get_shop_instance(shop=self.shop)
-                if not shop_product:
+                try:
+                    shop_product = product.get_shop_instance(shop=self.shop)
+                except ShopProduct.DoesNotExist:
                     yield ValidationError(
                         _("%s not available in this shop") % product.name,
                         code="product_not_available_in_shop"
                     )
+                    continue
                 for error in shop_product.get_orderability_errors(
                         supplier=supplier, quantity=quantity, customer=self.customer):
                     error.message = "%s: %s" % (product.name, error.message)
@@ -596,6 +600,27 @@ class OrderSource(object):
             obj = model.objects.get(pk=pk)
             self._object_cache[(model, pk)] = obj
         return obj
+
+    def get_total_tax_amount(self):
+        """
+        :rtype: Money
+        """
+        return sum(
+            (line.tax_amount for line in self.get_final_lines()),
+            self.zero_price.amount)
+
+    def get_tax_summary(self):
+        """
+        :rtype: TaxSummary
+        """
+        all_line_taxes = []
+        untaxed = TaxlessPrice(self.create_price(0).amount)
+        for line in self.get_final_lines():
+            line_taxes = list(line.taxes)
+            all_line_taxes.extend(line_taxes)
+            if not line_taxes:
+                untaxed += line.taxless_price
+        return taxing.TaxSummary.from_line_taxes(all_line_taxes, untaxed)
 
 
 def _collect_lines_from_signal(signal_results):

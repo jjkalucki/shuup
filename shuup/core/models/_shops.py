@@ -14,6 +14,7 @@ from django.utils.translation import ugettext_lazy as _
 from enumfields import Enum, EnumIntegerField
 from filer.fields.image import FilerImageField
 from jsonfield import JSONField
+from parler.managers import TranslatableManager
 from parler.models import TranslatedFields
 
 from shuup.core.fields import CurrencyField, InternalIdentifierField
@@ -26,6 +27,14 @@ from ._orders import Order
 
 def _get_default_currency():
     return settings.SHUUP_HOME_CURRENCY
+
+
+class ShopManager(TranslatableManager):
+    def get_for_user(self, user):
+        qs = self.get_queryset()
+        if user.is_superuser:
+            return qs.all()
+        return qs.filter(staff_members=user)
 
 
 class ShopStatus(Enum):
@@ -43,7 +52,7 @@ class Shop(ChangeProtected, TranslatableShuupModel):
     change_protect_message = _("The following fields cannot be changed since there are existing orders for this shop")
 
     created_on = models.DateTimeField(auto_now_add=True, editable=False, verbose_name=_('created on'))
-    modified_on = models.DateTimeField(auto_now=True, editable=False, verbose_name=_('modified on'))
+    modified_on = models.DateTimeField(auto_now=True, editable=False, db_index=True, verbose_name=_('modified on'))
     identifier = InternalIdentifierField(unique=True, max_length=128)
     domain = models.CharField(max_length=128, blank=True, null=True, unique=True, verbose_name=_("domain"), help_text=_(
         "Your shop domain name. Use this field to configure the URL that is used to visit your site. "
@@ -90,6 +99,12 @@ class Shop(ChangeProtected, TranslatableShuupModel):
             )
         )
     )
+
+    objects = ShopManager()
+
+    class Meta:
+        verbose_name = _('shop')
+        verbose_name_plural = _('shops')
 
     def __str__(self):
         return self.safe_translation_getter("name", default="Shop %d" % self.pk)

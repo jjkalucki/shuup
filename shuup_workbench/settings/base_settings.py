@@ -68,6 +68,7 @@ INSTALLED_APPS = add_enabled_addons(SHUUP_ENABLED_ADDONS_FILE, [
     'bootstrap3',
     'django_countries',
     'django_jinja',
+    'django_filters',
     'filer',
     'registration',
     'rest_framework',
@@ -84,7 +85,10 @@ MIDDLEWARE_CLASSES = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'shuup.front.middleware.ProblemMiddleware',
+    'shuup.core.middleware.ShuupMiddleware',
     'shuup.front.middleware.ShuupFrontMiddleware',
+    'shuup.xtheme.middleware.XthemeMiddleware',
+    'shuup.admin.middleware.ShuupAdminMiddleware'
 ]
 
 ROOT_URLCONF = 'shuup_workbench.urls'

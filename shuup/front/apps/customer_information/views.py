@@ -9,12 +9,16 @@ import six
 from django.contrib import messages
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.views import password_change
+from django.http import HttpResponseNotFound
 from django.shortcuts import redirect
 from django.utils.translation import ugettext_lazy as _
 from django.views.generic import FormView, TemplateView
+from registration.signals import user_registered
 
+from shuup import configuration
 from shuup.core.models import (
-    get_company_contact, get_person_contact, MutableAddress, SavedAddress
+    CompanyContact, get_company_contact, get_person_contact, MutableAddress,
+    SavedAddress
 )
 from shuup.front.views.dashboard import DashboardViewMixin
 from shuup.utils.form_group import FormGroup
@@ -79,6 +83,11 @@ class CustomerEditView(DashboardViewMixin, FormView):
 class CompanyEditView(DashboardViewMixin, FormView):
     template_name = "shuup/customer_information/edit_company.jinja"
 
+    def dispatch(self, request, *args, **kwargs):
+        if not configuration.get(None, "allow_company_registration"):
+            return HttpResponseNotFound()
+        return super(CompanyEditView, self).dispatch(request, *args, **kwargs)
+
     def get_form(self, form_class):
         user = self.request.user
         company = get_company_contact(user)
@@ -116,16 +125,29 @@ class CompanyEditView(DashboardViewMixin, FormView):
         if shipping_address.pk != company.default_shipping_address_id:  # Identity changed due to immutability
             company.default_shipping_address = shipping_address
 
-        user.email = company.email
-        user.first_name = company.name
-        user.last_name = ""
-        user.save()
+        message = _("Company information saved successfully.")
+        # If company registration requires activation,
+        # company will be created as inactive.
+        if is_new and configuration.get(None, "company_registration_requires_approval"):
+            company.is_active = False
+            message = _("Company information saved successfully. "
+                        "Please follow the instructions sent to your email address.")
 
         company.save()
         if is_new:
+            user_registered.send(sender=self.__class__,
+                                 user=self.request.user,
+                                 request=self.request)
             CompanyAccountCreated(contact=company, customer_email=company.email).run()
-        messages.success(self.request, _("Company information saved successfully."))
+
+        messages.success(self.request, message)
         return redirect("shuup:company_edit")
+
+    def get_context_data(self, **kwargs):
+        context = super(CompanyEditView, self).get_context_data(**kwargs)
+        context["pending_company_approval"] = CompanyContact.objects.filter(
+            members__in=[self.request.customer], is_active=False).exists()
+        return context
 
 
 class AddressBookView(DashboardViewMixin, TemplateView):

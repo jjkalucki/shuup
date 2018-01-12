@@ -13,7 +13,7 @@ from django.views.generic import DetailView, ListView, View
 from django.views.generic.detail import SingleObjectMixin
 
 from shuup.core.excs import ProductNotOrderableProblem
-from shuup.core.models import OrderLineType, Product
+from shuup.core.models import OrderLineType, Product, ShopProduct
 from shuup.core.utils.users import real_user_or_none
 from shuup.front.models import StoredBasket
 from shuup.front.views.dashboard import DashboardViewMixin
@@ -90,11 +90,11 @@ class CartAddAllProductsView(CartViewMixin, SingleObjectMixin, View):
     def get_object(self):
         return get_object_or_404(self.get_queryset(), pk=self.kwargs.get("pk"))
 
-    def _get_supplier(self, shop_product, supplier_id):
+    def _get_supplier(self, shop_product, supplier_id, customer, quantity, shipping_address):
         if supplier_id:
             supplier = shop_product.suppliers.filter(pk=supplier_id).first()
         else:
-            supplier = shop_product.suppliers.first()
+            supplier = shop_product.get_supplier(customer, quantity, shipping_address)
         return supplier
 
     @atomic
@@ -108,11 +108,13 @@ class CartAddAllProductsView(CartViewMixin, SingleObjectMixin, View):
             if line.get("type", None) != OrderLineType.PRODUCT:
                 continue
             product = Product.objects.get(id=line.get("product_id", None))
-            shop_product = product.get_shop_instance(shop=request.shop)
-            if not shop_product:
+            try:
+                shop_product = product.get_shop_instance(shop=request.shop)
+            except ShopProduct.DoesNotExist:
                 errors.append({"product": line.text, "message": _("Product not available in this shop")})
                 continue
-            supplier = self._get_supplier(shop_product, line.get("supplier_id"))
+            supplier = self._get_supplier(
+                shop_product, line.get("supplier_id"), basket.customer, line.get("quantity"), basket.shipping_address)
             if not supplier:
                 errors.append({"product": line.text, "message": _("Invalid supplier")})
                 continue

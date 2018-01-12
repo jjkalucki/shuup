@@ -8,13 +8,10 @@
 from __future__ import unicode_literals
 
 import hashlib
-import warnings
 
 import six
 from django.core.urlresolvers import reverse
 from django.utils.encoding import force_bytes, force_text
-
-from shuup.utils.deprecation import RemovedFromShuupWarning
 
 
 class AdminModule(object):
@@ -85,7 +82,7 @@ class AdminModule(object):
         """
         return ()
 
-    def get_model_url(self, object, kind):
+    def get_model_url(self, object, kind, shop=None):
         """
         Retrieve an admin URL for the given object of the kind `kind`.
 
@@ -96,6 +93,8 @@ class AdminModule(object):
         :type object: django.db.models.Model
         :param kind: URL kind. Currently "detail", "list" or "new".
         :type kind: str
+        :param shop: The shop that owns the resource
+        :type shop: shuup.core.models.Shop|None
         :return: The reversed URL or none.
         :rtype: str|None
         """
@@ -229,18 +228,19 @@ class Section(object):
     extra_js = ""
     order = 0
 
-    @staticmethod
-    def visible_for_object(obj):
+    @classmethod
+    def visible_for_object(cls, obj, request=None):
         """
         Returns whether this sections must be visible for the provided object (e.g. `order`)
         :type model object: e.g. shuup.core.models.Order
+        :type request: HttpRequest
         :return whether this section must be shown in order section list, defaults to false
         :rtype: bool
         """
         return False
 
-    @staticmethod
-    def get_context_data(obj):
+    @classmethod
+    def get_context_data(cls, obj, request=None):
         """
         Returns additional information to be used in the template
 
@@ -251,23 +251,8 @@ class Section(object):
 
 
         :type object: e.g. shuup.core.models.Order
+        :type request: HttpRequest
         :return additional context data
         :rtype: object|None
         """
         return None
-
-
-class OrderSection(Section):
-    """
-    Deprecated use Section instead
-    """
-    def __new__(cls):
-        warnings.warn("OrderSection in shuup.admin.base is deprecated, use Section instead ", RemovedFromShuupWarning)
-        return super(OrderSection, cls).__new__(cls)
-
-    @classmethod
-    def visible_for_object(cls, order):
-        """
-        Support for the deprecated `visible_for_order` function
-        """
-        return cls.visible_for_order(order) or super(OrderSection, cls).visible_for_object(order)

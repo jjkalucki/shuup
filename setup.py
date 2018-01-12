@@ -40,7 +40,7 @@ VERSION_FILE = os.path.join(TOPDIR, 'shuup', '_version.py')
 #      - Add ".post0.dev" suffix to VERSION variable here
 
 NAME = 'shuup'
-VERSION = '1.2.0b1.post0.dev'
+VERSION = '1.4.0.post0.dev'
 DESCRIPTION = 'E-Commerce Platform'
 AUTHOR = 'Shoop Commerce Ltd.'
 AUTHOR_EMAIL = 'shuup@shuup.com'
@@ -48,11 +48,11 @@ URL = 'http://shuup.com/'
 DOWNLOAD_URL_TEMPLATE = (
     'https://github.com/shuup/shuup/releases/download/'
     'v{version}/shuup-{version}-py2.py3-none-any.whl')
-LICENSE = 'OSL-3.0'  # https://spdx.org/licenses/
+LICENSE = 'proprietary'  # https://spdx.org/licenses/
 CLASSIFIERS = """
 Development Status :: 5 - Production/Stable
 Intended Audience :: Developers
-License :: OSI Approved
+License :: Other/Proprietary License
 Natural Language :: English
 Natural Language :: Chinese (Simplified)
 Natural Language :: Finnish
@@ -97,7 +97,7 @@ REQUIRES = [
     'django-parler>=1.5,<1.6.3',
     'django-parler-rest>=1.3a1,<2',
     'django-polymorphic>=0.8.0,<0.10',
-    'django-registration-redux>=1.2,<2',
+    'django-registration-redux>=1.2,<1.5',
     'django-timezone-field>=1.2,<2',
     'djangorestframework>=3.5,<3.6',
     'djangorestframework-jwt>=1.9,<2',

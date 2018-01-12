@@ -19,12 +19,14 @@ from shuup.admin.form_part import (
     FormPart, FormPartsViewMixin, SaveFormPartsMixin, TemplatedFormDef
 )
 from shuup.admin.modules.shops.forms import ContactAddressForm, ShopBaseForm
+from shuup.admin.shop_provider import set_shop
 from shuup.admin.toolbar import get_default_edit_toolbar
 from shuup.admin.utils.views import (
     check_and_raise_if_only_one_allowed, CreateOrUpdateView
 )
 from shuup.admin.utils.wizard import onboarding_complete
 from shuup.core.models import Shop
+from shuup.core.settings_provider import ShuupSettings
 
 
 class ShopBaseFormPart(FormPart):
@@ -93,13 +95,21 @@ class ShopEditView(SaveFormPartsMixin, FormPartsViewMixin, CreateOrUpdateView):
     def get_object(self, queryset=None):
         obj = super(ShopEditView, self).get_object(queryset)
         check_and_raise_if_only_one_allowed("SHUUP_ENABLE_MULTIPLE_SHOPS", obj)
-
         return obj
 
     def get_toolbar(self):
         save_form_id = self.get_save_form_id()
-        return get_default_edit_toolbar(self, save_form_id, with_split_save=settings.SHUUP_ENABLE_MULTIPLE_SHOPS)
+        with_split_save = ShuupSettings.get_setting("SHUUP_ENABLE_MULTIPLE_SHOPS")
+        return get_default_edit_toolbar(self, save_form_id, with_split_save=with_split_save)
 
     @atomic
     def form_valid(self, form):
         return self.save_form_parts(form)
+
+
+class ShopSelectView(View):
+    def get(self, request, *args, **kwargs):
+        shop = Shop.objects.filter(pk=kwargs.get("pk")).first()
+        set_shop(request, shop)
+        messages.info(request, (_("Shop {} is now active!")).format(shop.name))
+        return HttpResponseRedirect(request.META.get("HTTP_REFERER", reverse("shuup_admin:home")))

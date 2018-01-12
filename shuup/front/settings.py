@@ -10,7 +10,7 @@
 #: This is the easiest way to customize the order creation process
 #: without having to override a single URL or touch the ``shuup.front`` code.
 SHUUP_BASKET_ORDER_CREATOR_SPEC = (
-    "shuup.front.basket.order_creator:BasketOrderCreator")
+    "shuup.core.basket.order_creator:BasketOrderCreator")
 
 #: Spec string for the Django CBV (or an API-compliant class) for the basket view.
 #:
@@ -23,12 +23,12 @@ SHUUP_BASKET_VIEW_SPEC = (
 #:
 #: This view deals with commands ``POST``ed to ``/basket/``.
 SHUUP_BASKET_COMMAND_DISPATCHER_SPEC = (
-    "shuup.front.basket.command_dispatcher:BasketCommandDispatcher")
+    "shuup.core.basket.command_dispatcher:BasketCommandDispatcher")
 
 #: Spec string for the update method dispatcher used when the basket is updated (usually
 #: on the basket page).
 SHUUP_BASKET_UPDATE_METHODS_SPEC = (
-    "shuup.front.basket.update_methods:BasketUpdateMethods")
+    "shuup.core.basket.update_methods:BasketUpdateMethods")
 
 #: Spec string for the basket class used in the frontend.
 #:
@@ -39,10 +39,9 @@ SHUUP_BASKET_CLASS_SPEC = (
 
 #: The spec string defining which basket storage class to use for the frontend.
 #:
-#: Basket storages are responsible for persisting visitor basket state, whether
-#: in the database (DatabaseBasketStorage) or directly in the session
-#: (DirectSessionBasketStorage).  Custom storage backends could use caches, flat
-#: files, etc. if required.
+#: Basket storages are responsible for persisting visitor basket state,
+#: the default stores the basket to database (DatabaseBasketStorage)
+#: Custom storage backends could use caches, flat files, etc. if required.
 SHUUP_BASKET_STORAGE_CLASS_SPEC = (
     "shuup.front.basket.storage:DatabaseBasketStorage")
 
@@ -67,3 +66,30 @@ SHUUP_FRONT_DEFAULT_SORT_CONFIGURATION = {
 #:
 #: Cache duration in seconds for front template helpers. Default 30 minutes.
 SHUUP_TEMPLATE_HELPERS_CACHE_DURATION = 60*30
+
+#: A dictionary defining properties to override the default field properties of the
+#: person contact form. Should map the field name (as a string) to a dictionary
+#: containing the overriding Django form field properties, as in the following
+#: example which makes the gender field hidden:
+#:
+#: SHUUP_PERSON_CONTACT_FIELD_PROPERTIES = {
+#:    "gender": {"widget": forms.HiddenInput()}
+#: }
+#:
+#: It should be noted, however, that overriding some settings (such as making a
+#: required field non-required) could create other validation issues.
+SHUUP_PERSON_CONTACT_FIELD_PROPERTIES = {}
+
+#: A dictionary defining properties to override the default field properties of the
+#: confirm form. Should map the field name (as a string) to a dictionary
+#: containing the overriding Django form field properties, as in the following
+#: example which makes the gender field hidden:
+#:
+#: SHUUP_CHECKOUT_CONFIRM_FORM_PROPERTIES = {
+#:    "marketing": {"initial": True},
+#:    "comment": {"widget": forms.HiddenInput()}
+#: }
+#:
+#: It should be noted, however, that overriding some settings (such as making a
+#: required field non-required) could create other validation issues.
+SHUUP_CHECKOUT_CONFIRM_FORM_PROPERTIES = {}

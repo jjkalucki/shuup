@@ -5,141 +5,102 @@
 #
 # This source code is licensed under the OSL-3.0 license found in the
 # LICENSE file in the root directory of this source tree.
-import six
 from django import forms
-from django.contrib.auth.forms import User, UserCreationForm
+from django.contrib.auth.forms import UserCreationForm
 from django.utils.translation import ugettext_lazy as _
-from django_countries import countries
-from django_countries.widgets import CountrySelectWidget
-from registration.users import UsernameField
 
-from shuup.core.models import CompanyContact, MutableAddress, PersonContact
+from shuup import configuration
+from shuup.core.models import CompanyContact, PersonContact
+from shuup.utils.form_group import FormGroup
+from shuup.utils.importing import cached_load
 
 
-class CompanyRegistrationForm(UserCreationForm):
-    """
-    Form for registering a new account.
-
-    Validates that the requested username is not already in use, and
-    requires the password to be entered twice to catch typos.
-
-    Subclasses should feel free to add any additional validation they
-    need, but should avoid defining a ``save()`` method -- the actual
-    saving of collected user data is delegated to the active
-    registration backend.
-
-    """
-    required_css_class = 'required'
-    email = forms.EmailField(label=_("E-mail"))
-
-    contact_first_name = forms.CharField(max_length=255, label=_("First Name"))
-    contact_last_name = forms.CharField(max_length=255, label=_("Last Name"))
-    contact_phone = forms.CharField(
-        label=_('Phone'), max_length=64, help_text=_("The primary phone number for the address."))
-    contact_street = forms.CharField(
-        label=_('Street'), max_length=255, help_text=_("The street address."))
-    contact_street2 = forms.CharField(
-        label=_('Street (2)'), required=False, max_length=255,
-        help_text=_("An additional street address line."))
-    contact_street3 = forms.CharField(
-        label=_('Street (3)'), required=False, max_length=255,
-        help_text=_("Any additional street address line."))
-    contact_postal_code = forms.CharField(
-        label=_('Postal Code'), max_length=64, help_text=_("The address postal/zip code."))
-    contact_city = forms.CharField(label=_('City'), max_length=255, help_text=_("The address city."))
-    contact_region_code = forms.CharField(
-        label=_('Region Code'), required=False, max_length=16,
-        help_text=_("The address region, province, or state."))
-    contact_region = forms.CharField(
-        label=_('Region'), required=False, max_length=64,
-        help_text=_("The address region, province, or state."))
-    contact_country = forms.ChoiceField(choices=countries, label=_("Country"), widget=CountrySelectWidget)
-    company_name = forms.CharField(
-        label=_('Name'), max_length=255, help_text=_("The name for the address."))
-    company_name_ext = forms.CharField(
-        label=_('Name Extension'), required=False, max_length=255,
-        help_text=_(
-            "Any other text to display along with the address. "
-            "This could be department names (for companies) or titles (for people)."))
-    company_www = forms.URLField(max_length=128, required=False, label=_("Web Address"))
-    company_tax_number = forms.CharField(
-        label=_('Tax Number'), max_length=32,
-        help_text=_("The business tax number. For example, EIN in US or VAT code in Europe."))
-    company_email = forms.EmailField(
-        label=_('Email'), max_length=128, help_text=_("The primary email for the address."))
-    company_phone = forms.CharField(
-        label=_('Phone'), max_length=64, help_text=_("The primary phone number for the address."))
-    company_street = forms.CharField(
-        label=_('Street'), max_length=255, help_text=_("The street address."))
-    company_street2 = forms.CharField(
-        label=_('Street (2)'), max_length=255, help_text=_("An additional street address line."), required=False)
-    company_street3 = forms.CharField(
-        label=_('Street (3)'), required=False, max_length=255,
-        help_text=_("Any additional street address line."))
-    company_postal_code = forms.CharField(
-        label=_('Postal Code'), max_length=64, help_text=_("The address postal/zip code."))
-    company_city = forms.CharField(label=_('City'), max_length=255, help_text=_("The address city."))
-    company_region_code = forms.CharField(
-        label=_('Region Code'), required=False, max_length=16,
-        help_text=_("The address region, province, or state."))
-    company_region = forms.CharField(
-        label=_('Region'), required=False, max_length=64,
-        help_text=_("The address region, province, or state."))
-    company_country = forms.ChoiceField(choices=countries, label=_("Country"), widget=CountrySelectWidget)
-
+class CompanyForm(forms.ModelForm):
     class Meta:
-        model = User
-        fields = (UsernameField(), "email")
+        model = CompanyContact
+        fields = ['name', 'name_ext', 'tax_number', 'email', 'phone', 'www']
+        help_texts = {
+            'name': _("Name of the company"),
+            'email': None, 'phone': None,
+        }
+
+    def __init__(self, *args, **kwargs):
+        super(CompanyForm, self).__init__(*args, **kwargs)
+        self.fields['name'].required = True
+        self.fields['tax_number'].required = True
+        address_form = cached_load('SHUUP_ADDRESS_MODEL_FORM')()
+        for field in self.fields:
+            if field not in ('name', 'tax_number', 'www'):
+                address_formfield = address_form.fields.get(field)
+                if address_formfield:
+                    self.fields[field].required = address_formfield.required
+                else:
+                    del self.fields[field]
+
+
+class ContactPersonForm(forms.ModelForm):
+    class Meta:
+        model = PersonContact
+        fields = ['first_name', 'last_name', 'email', 'phone']
+
+    def __init__(self, **kwargs):
+        super(ContactPersonForm, self).__init__(**kwargs)
+        for (field_name, formfield) in self.fields.items():
+            if field_name in ['first_name', 'last_name', 'email']:
+                formfield.required = True
+                formfield.help_text = None
+
+
+class CompanyRegistrationForm(FormGroup):
+    def __init__(self, *args, **kwargs):
+        super(CompanyRegistrationForm, self).__init__(*args, **kwargs)
+        address_form_cls = cached_load('SHUUP_ADDRESS_MODEL_FORM')
+        self.add_form_def('company', CompanyForm)
+        self.add_form_def('billing', address_form_cls)
+        self.add_form_def('contact_person', ContactPersonForm)
+        self.add_form_def('user_account', UserCreationForm)
+
+    def instantiate_forms(self):
+        super(CompanyRegistrationForm, self).instantiate_forms()
+        company_form = self.forms['company']
+        billing_form = self.forms['billing']
+        for field in list(billing_form.fields):
+            billing_form.fields[field].help_text = None
+            if field in company_form.fields:
+                del billing_form.fields[field]
 
     def save(self, commit=True):
+        company = self.forms['company'].save(commit=False)
+        billing_address = self.forms['billing'].save(commit=False)
+        person = self.forms['contact_person'].save(commit=False)
+        user = self.forms['user_account'].save(commit=False)
 
-        def populate_address(needle):
-            data = {}
-            delete = []
-            for k, value in six.iteritems(self.cleaned_data):
-                if k.startswith(needle):
-                    key = k.replace(needle, "")
-                    data[key] = value
-                    delete.append(k)
+        company.default_billing_address = billing_address
+        company.default_shipping_address = billing_address
 
-            # sweep unneeded keys
-            for k in delete:
-                del self.cleaned_data[k]
+        for field in ['name', 'name_ext', 'email', 'phone']:
+            setattr(billing_address, field, getattr(company, field))
 
-            return data
+        person.user = user
 
-        contact_address_data = populate_address("contact_")
-        company_address_data = populate_address("company_")
-        user = super(CompanyRegistrationForm, self).save(commit)
+        user.first_name = person.first_name
+        user.last_name = person.last_name
+        user.email = person.email
 
-        website = company_address_data.pop("www")
+        # If company registration requires approval,
+        # company and person contacts will be created as inactive
+        if configuration.get(None, "company_registration_requires_approval"):
+            company.is_active = False
+            person.is_active = False
 
-        contact_address = MutableAddress.from_data(contact_address_data)
-        contact_address.save()
-        company_address = MutableAddress.from_data(company_address_data)
-        company_address.save()
+        if commit:
+            user.save()
+            person.user = user
+            person.save()
+            billing_address.save()
+            company.default_billing_address = billing_address
+            company.default_shipping_address = billing_address
+            company.save()
+            company.members.add(person)
 
-        contact = PersonContact()
-        contact.is_active = False
-        contact.user = user
-        contact.email = user.email
-        contact.default_shipping_address = contact_address
-        contact.default_billing_address = contact_address
-        contact.first_name = contact_address_data["first_name"]
-        contact.last_name = contact_address_data["last_name"]
-        contact.phone = contact_address.phone
-        contact.save()
-
-        company = CompanyContact()
-        company.default_shipping_address = company_address
-        company.default_billing_address = company_address
-        company.is_active = False
-        company.phone = company_address.phone
-        company.www = website
-        company.name = company_address_data["name"]
-        company.name_ext = company_address_data["name_ext"]
-        company.tax_number = company_address_data["tax_number"]
-        company.email = company_address_data["email"]
-        company.save()
-        company.members.add(contact)
         return user

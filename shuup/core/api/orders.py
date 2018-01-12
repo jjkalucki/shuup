@@ -15,14 +15,18 @@ from django_filters import DateTimeFilter
 from django_filters.rest_framework import DjangoFilterBackend, FilterSet
 from rest_framework import serializers, status
 from rest_framework.decorators import detail_route
+from rest_framework.fields import JSONField
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from shuup.admin.modules.orders.json_order_creator import JsonOrderCreator
 from shuup.admin.modules.orders.views.edit import encode_address
 from shuup.api.mixins import PermissionHelperMixin, ProtectedModelViewSetMixin
+from shuup.core.api.address import AddressSerializer
+from shuup.core.api.mixins import AvailableOrderMethodsMixin
+from shuup.core.api.refunds import RefundMixin
 from shuup.core.models import (
-    Contact, MutableAddress, Order, OrderLine, OrderStatus, Payment, Shop
+    Contact, Order, OrderLine, OrderStatus, OrderStatusRole, Payment, Shop
 )
 from shuup.utils.money import Money
 
@@ -38,23 +42,21 @@ class OrderLineSerializer(serializers.ModelSerializer):
         return fields
 
 
-class AddressSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = MutableAddress
-        fields = "__all__"
-
-
 class PaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Payment
         fields = ("payment_identifier", "amount_value", "description")
 
 
-class OrderSerializer(serializers.ModelSerializer):
+class OrderSerializer(AvailableOrderMethodsMixin, serializers.ModelSerializer):
     lines = OrderLineSerializer(many=True)
     billing_address = AddressSerializer(read_only=True)
     shipping_address = AddressSerializer(read_only=True)
     payments = PaymentSerializer(many=True, read_only=True)
+    payment_data = JSONField(read_only=True)
+    shipping_data = JSONField(read_only=True)
+    extra_data = JSONField(read_only=True)
+    codes = JSONField(source='_codes', read_only=True)
 
     class Meta:
         model = Order
@@ -69,8 +71,6 @@ class OrderSerializer(serializers.ModelSerializer):
                 field.default = lambda: now()
             if name == "status":
                 field.default = OrderStatus.objects.get_default_initial()
-            if name in ("shipping_method", "payment_method", "customer"):
-                field.required = True
         return fields
 
 
@@ -87,7 +87,69 @@ class OrderFilter(FilterSet):
         fields = ["identifier", "date", "status"]
 
 
-class OrderViewSet(PermissionHelperMixin, ProtectedModelViewSetMixin, ModelViewSet):
+class OrderStatusChangeMixin(object):
+    def change_order_status(self, to_status):
+        order = self.get_object()
+        from_status = order.status
+        if (
+            to_status.role == OrderStatusRole.COMPLETE and not order.can_set_complete() or
+            to_status.role == OrderStatusRole.CANCELED and not order.can_set_canceled()
+        ):
+            return Response({
+                "status": "error",
+                "errors": [{
+                    "code": "invalid_status_change"
+                }]
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        order.status = to_status
+        order.save(update_fields=("status", "modified_on"))
+        message = _("Order status changed: {from_status} to {to_status}").format(
+            from_status=from_status, to_status=to_status)
+        order.add_log_entry(message, user=self.request.user, identifier="status_change")
+        return Response({"status": str(to_status)}, status=status.HTTP_200_OK)
+
+    @detail_route(methods=['post'])
+    def complete(self, request, pk=None):
+        """ Set the order as Completed. """
+        return self.change_order_status(OrderStatus.objects.get_default_complete())
+
+    @detail_route(methods=['post'])
+    def cancel(self, request, pk=None):
+        """ Set the order as Canceled. """
+        return self.change_order_status(OrderStatus.objects.get_default_canceled())
+
+
+class OrderTaxesMixin(object):
+    @detail_route(methods=['get'])
+    def taxes(self, request, pk=None):
+        """
+        Get taxes for order
+        """
+        from shuup.core.api.tax import OrderLineTaxSerializer, TaxSummarySerializer
+        order = self.get_object()
+        tax_summary = order.get_tax_summary()
+        rows = [row.to_dict() for row in tax_summary if row.tax_id]
+        serializer = TaxSummarySerializer(data=rows, many=True)
+        serializer.is_valid(True)
+        lines = []
+        for line in order.lines.filter(taxes__isnull=False):
+            taxes = line.taxes.all()
+            ts = OrderLineTaxSerializer(taxes, many=True, context=self.get_serializer_context())
+            for row in ts.data:
+                lines.append(row)
+        return Response({
+            "summary": serializer.validated_data,
+            "lines": lines
+        })
+
+
+class OrderViewSet(PermissionHelperMixin,
+                   ProtectedModelViewSetMixin,
+                   OrderTaxesMixin,
+                   OrderStatusChangeMixin,
+                   RefundMixin,
+                   ModelViewSet):
     """
     retrieve: Fetches an order by its ID.
 
@@ -128,10 +190,17 @@ class OrderViewSet(PermissionHelperMixin, ProtectedModelViewSetMixin, ModelViewS
         request.data["orderer"] = None
         request.data["modified_by"] = None
         request.data["creator"] = request.user.pk
+        if 'shipping_method' not in request.data:
+            request.data['shipping_method'] = None
+        if 'payment_method' not in request.data:
+            request.data['payment_method'] = None
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         shop = Shop.objects.get(pk=serializer.data["shop"])
-        customer = Contact.objects.get(pk=serializer.data["customer"])
+        if serializer.data.get('customer'):
+            customer = Contact.objects.get(pk=serializer.data["customer"])
+        else:
+            customer = None
         lines = [{
             "id": (idx + 1),
             "quantity": line["quantity"],
@@ -159,13 +228,14 @@ class OrderViewSet(PermissionHelperMixin, ProtectedModelViewSetMixin, ModelViewS
                 "shippingMethod": {"id": serializer.data["shipping_method"]},
                 "paymentMethod": {"id": serializer.data["payment_method"]},
             },
-            "customer": {
+            "lines": lines
+        }
+        if customer:
+            data["customer"] = {
                 "id": serializer.data["customer"],
                 "billingAddress": encode_address(customer.default_billing_address),
                 "shippingAddress": encode_address(customer.default_shipping_address),
-            },
-            "lines": lines
-        }
+            }
         joc = JsonOrderCreator()
         order = joc.create_order_from_state(data, creator=request.user)
         if not order:
@@ -179,39 +249,6 @@ class OrderViewSet(PermissionHelperMixin, ProtectedModelViewSetMixin, ModelViewS
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
-    @detail_route(methods=['put'])
-    def complete(self, request, pk=None):
-        """ Set the order as Completed. """
-
-        order = self.get_object()
-        if not order.can_set_complete():
-            return Response({
-                "status": "error",
-                "errors": [{
-                    "message": "Cannot complete order",
-                    "code": "invalid_status_change"
-                }]
-            }, status=status.HTTP_400_BAD_REQUEST)
-        order.status = OrderStatus.objects.get_default_complete()
-        order.save(update_fields=("status",))
-        return Response({"status": "order marked complete"}, status=status.HTTP_200_OK)
-
-    @detail_route(methods=['put'])
-    def cancel(self, request, pk=None):
-        """ Set the order as Canceled. """
-
-        order = self.get_object()
-        if not order.can_set_canceled():
-            return Response({
-                "status": "error",
-                "errors": [{
-                    "message": "Cannot cancel order",
-                    "code": "invalid_status_change"
-                }]
-            }, status=status.HTTP_400_BAD_REQUEST)
-        order.set_canceled()
-        return Response({"status": "order canceled"}, status=status.HTTP_200_OK)
-
     @detail_route(methods=['post'])
     def create_payment(self, request, pk=None):
         """ Creates a payment for the order. """
@@ -222,7 +259,7 @@ class OrderViewSet(PermissionHelperMixin, ProtectedModelViewSetMixin, ModelViewS
         """ Set the order as Fully Paid. """
         order = self.get_object()
         if order.is_paid():
-            return Response({"status": "order is already fully paid"})
+            return Response({"error": _("Order is already fully paid")})
 
         request.data["currency"] = order.currency
         request.data["amount_value"] = (order.taxful_total_price_value - order.get_total_paid_amount().value)
@@ -231,13 +268,12 @@ class OrderViewSet(PermissionHelperMixin, ProtectedModelViewSetMixin, ModelViewS
 
 def _handle_payment_creation(request, order):
     serializer = PaymentSerializer(data=request.data)
-    if serializer.is_valid():
-        data = serializer.validated_data
-        order.create_payment(
-            Money(data["amount_value"], order.currency),
-            data["payment_identifier"],
-            data.get("description", "")
-        )
-        return Response({'status': 'payment created'}, status=status.HTTP_201_CREATED)
-    else:
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    serializer.is_valid(raise_exception=True)
+
+    data = serializer.validated_data
+    order.create_payment(
+        Money(data["amount_value"], order.currency),
+        data["payment_identifier"],
+        data.get("description", "")
+    )
+    return Response({"success": _("Payment created")}, status=status.HTTP_201_CREATED)

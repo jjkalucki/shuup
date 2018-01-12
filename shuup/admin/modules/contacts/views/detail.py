@@ -12,6 +12,7 @@ import warnings
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
+from django.core.exceptions import PermissionDenied
 from django.core.urlresolvers import reverse
 from django.http.response import HttpResponseRedirect
 from django.utils.encoding import force_text
@@ -24,6 +25,7 @@ from shuup.admin.toolbar import (
 from shuup.admin.utils.permissions import get_default_model_permissions
 from shuup.apps.provides import get_provide_objects
 from shuup.core.models import CompanyContact, Contact
+from shuup.front.apps.registration.signals import company_contact_activated
 from shuup.utils.deprecation import RemovedFromShuupWarning
 from shuup.utils.excs import Problem
 
@@ -131,6 +133,18 @@ class ContactDetailView(DetailView):
     template_name = "shuup/admin/contacts/detail.jinja"
     context_object_name = "contact"
 
+    def get_object(self, *args, **kwargs):
+        obj = super(ContactDetailView, self).get_object(*args, **kwargs)
+
+        limited = (settings.SHUUP_ENABLE_MULTIPLE_SHOPS and settings.SHUUP_MANAGE_CONTACTS_PER_SHOP and
+                   not self.request.user.is_superuser)
+        if limited:
+            shop = self.request.shop
+            if shop not in obj.shops.all():
+                raise PermissionDenied()
+
+        return obj
+
     def get_context_data(self, **kwargs):
         context = super(ContactDetailView, self).get_context_data(**kwargs)
         context["toolbar"] = ContactDetailToolbar(contact=self.object, request=self.request)
@@ -143,14 +157,16 @@ class ContactDetailView(DetailView):
         contact_sections_provides = sorted(get_provide_objects("admin_contact_section"), key=lambda x: x.order)
         for admin_contact_section in contact_sections_provides:
             # Check whether the ContactSection should be visible for the current object
-            if admin_contact_section.visible_for_object(self.object):
+            if admin_contact_section.visible_for_object(self.object, self.request):
                 context["contact_sections"].append(admin_contact_section)
                 # add additional context data where the key is the contact_section identifier
-                context[admin_contact_section.identifier] = admin_contact_section.get_context_data(self.object)
+                section_context = admin_contact_section.get_context_data(self.object, self.request)
+                context[admin_contact_section.identifier] = section_context
 
         return context
 
     def _handle_set_is_active(self):
+        old_state = self.object.is_active
         state = bool(int(self.request.POST["set_is_active"]))
         if not state and hasattr(self.object, "user"):
             if (getattr(self.object.user, 'is_superuser', False) and
@@ -165,6 +181,13 @@ class ContactDetailView(DetailView):
             "contact": self.object,
             "state": _("active") if state else _("inactive")
         })
+
+        if (self.object.is_active and self.object.is_active != old_state
+                and isinstance(self.object, CompanyContact)):
+            company_contact_activated.send(sender=type(self.object),
+                                           instance=self.object,
+                                           request=self.request)
+
         return HttpResponseRedirect(self.request.path)
 
     def post(self, request, *args, **kwargs):

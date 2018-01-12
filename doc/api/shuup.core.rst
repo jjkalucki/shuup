@@ -7,6 +7,7 @@ Subpackages
 .. toctree::
 
     shuup.core.api
+    shuup.core.basket
     shuup.core.cache
     shuup.core.defaults
     shuup.core.fields
@@ -53,6 +54,22 @@ shuup.core.settings module
 --------------------------
 
 .. automodule:: shuup.core.settings
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+shuup.core.settings_provider module
+-----------------------------------
+
+.. automodule:: shuup.core.settings_provider
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+shuup.core.shop_provider module
+-------------------------------
+
+.. automodule:: shuup.core.shop_provider
     :members:
     :undoc-members:
     :show-inheritance:

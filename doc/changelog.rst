@@ -12,6 +12,140 @@ Unrealeased
 Core
 ~~~~
 
+- Enable refunds for order API
+- API: Improved suppliers stock endpoints
+- Add setting to manage contacts per shop
+- Add ``ShuupMiddleware`` to set the current request shop
+- Add ``get_supplier`` for shop product to define the business logic of
+  getting supplier for order/basket line
+- Add shops to supplier to define which shops the supplier is available for
+- Introduce settings provider through new provide key
+  ``shuup_settings_provider``
+- Breaking change: Admin Section receives the request object and get methods
+  converted to classmethod
+- API: allow user to remove and clear basket coupons
+- API: allow custom Basket serializer
+- API: only return shop products of enabled shops
+- Do not allow adding variation parents in the basket
+- API: serialize front shop product price info
+- API: Return basket customer information
+- API: Add option to reset password for authenticated users
+- API: Add opiton to reset password with token
+- API: ``shuup.front.apps.auth.forms.PasswordRecoveryForm`` to core
+- Add name, description and short_description fields to ShopProduct model
+- API: add basket endpoint
+- API: created front simple product endpoint
+- API: add front orders endpoint to fetch users order history
+- API: added nearby filter for products
+- API: added nearby filter for shops
+- API: allow orders to be created without customer, addresses, or service
+  methods
+- API: add front user endpoint
+- API: add address endpoint
+- API: add person contact endpoint
+- API: add address endpoint
+
+Admin
+~~~~~
+
+- Add middleware to select and set the current shop in the request
+- Breaking change: add optional shop parameter in ``get_model_url`` method of
+  admin module
+- Add middleware to select the active admin shop using session
+- Only categories, orders, products, contacts, campaigns and services for the
+  active shop are displayed in the admin
+- Menu categories without any children are hidden
+
+Front
+~~~~~
+
+- Limit reqular user login access to own specified shop only
+
+Campaigns
+~~~~~~~~~
+
+- Remove uniqueness from coupon code texts. Instead make sure that one shop
+  does not have multiple active basket campaigns with same code.
+
+Customer Group Pricing
+~~~~~~~~~~~~~~~~~~~~~~
+
+- Introduce Customer Group Discounts.  A discount module to configure
+  discounts by contact group.
+
+Shuup 1.4.0
+-----------
+
+Released on 2017-11-29 13:00 +0200.
+
+Admin
+~~~~~
+
+- Picotable: Make it possible to provide custom columns
+
+Front
+~~~~~
+
+- Category View: Extract product filters to a function
+
+Notify
+~~~~~~
+
+- Allow Reply-To header for email notifications
+
+Shuup 1.3.0
+-----------
+
+Released on 2017-11-08 12:50 +0200.
+
+Front
+~~~~~
+
+- Add SHUUP_CHECKOUT_CONFIRM_FORM_PROPERTIES setting which can be used
+  to change confirm form field properties on order confirm page
+
+Shuup 1.2.2
+-----------
+
+Released on 2017-11-08 12:35 +0200.
+
+Core
+~~~~
+
+- Fix default OrderStatus identifiers and add a management command
+  ``shuup_fix_order_status_identifiers`` to fix them in the database too
+
+Shuup 1.2.1
+-----------
+
+Released on 2017-10-19 12:30 +0300.
+
+Core
+~~~~
+
+- price_display: Fix IndexError when product has no orderable children
+
+Front
+~~~~~
+
+- Add missing Finnish translations for customer information app
+
+Notify
+~~~~~~
+
+- Serialize Boolean event variable as boolean rather than text
+
+Shuup 1.2.0
+-----------
+
+Released on 2017-10-17 15:00 +0300.
+
+Core
+~~~~
+
+- Fix caching of price display filters
+- Fix serializaiton of JSON fields in Order: Object rather than string
+- Add new shipment_created_and_processed signal
 - Improve OrderSource caching for deserialization speedup
 - Add new product count methods to OrderSource
 - Fix bug in purchase multiple checking of ShopProduct
@@ -23,12 +157,10 @@ Core
 - Make shop identifier max length to 128 characters
 - Add `staff_members` manytomanyfield for shop
 
-Localization
-~~~~~~~~~~~~
-
 Admin
 ~~~~~
 
+- Fix contact list type filter
 - Add option to define a custom admin module loader
 - Quick add staff members for shops
 - Main menu is now updateable through provides.
@@ -41,58 +173,47 @@ Admin
 - Fix bug in product choice widget
 - Display last 12 months of sales in the dashboard chart
 
-Addons
-~~~~~~
-
 Front
 ~~~~~
 
+- Add SHUUP_PERSON_CONTACT_FIELD_PROPERTIES setting which can be used
+  to change person contact form field properties
+- Fix caching of ``shuup.product.is_visible`` template function
+- Checkout: Fix method phase attribute population
+- Send registration activation e-mail via notify event
+- Cusmoter information: Replace untranslated "Not specified" with a dash
+- Trigger shipment created event when addons have already processed it
+- Fix caching problem related to superuser being all seeing
 - Add shop phone and number on order received notification
 - Fix bug: Could no change quantities of unorderable lines in the basket
 - Use display units when rendering product quantities
 - Add new provide category called `product_context_extra`
   which can be used to add extra data to the product context.
 - It's now possible to re-order old order from order history
-- It's now possible for addons to extend front main menu using the
-  new `front_menu_extender` provide. See :doc:`provides.rst` for more information.
+- It's now possible for addons to extend front main menu using the new
+  ``front_menu_extender`` provide.  See :doc:`provides.rst` for more
+  information.
 - Fix default error handler always returning 200 OK as an HTTP status code.
   Now returns the appropriate status code.
 
 Xtheme
 ~~~~~~
 
-Classic Gray Theme
-~~~~~~~~~~~~~~~~~~
-
-Simple Supplier
-~~~~~~~~~~~~~~~
-
-Order Printouts
-~~~~~~~~~~~~~~~
+- Revert the query-parameter hack for static files introduced in 1.1.
+  Django's ManifestStaticFilesStorage can be used as a cleaner and more
+  robust way to implement auto-updating URLs for static files.
+- Fix Social Media Links plugin
+- Fix product highlight plugin best selling products
 
 Campaigns
 ~~~~~~~~~
 
-Customer Group Pricing
-~~~~~~~~~~~~~~~~~~~~~~
+- Fix handling of non-integer quantity in FreeProductLine
 
-Discount Pricing
-~~~~~~~~~~~~~~~~
+Reporting
+~~~~~~~~~
 
-Simple CMS
-~~~~~~~~~~
-
-Default Tax
-~~~~~~~~~~~
-
-Guide
-~~~~~
-
-Importer
-~~~~~~~~
-
-Regions
-~~~~~~~
+- Extend default tax report with pre-tax amount and total
 
 General/miscellaneous
 ~~~~~~~~~~~~~~~~~~~~~
@@ -100,7 +221,7 @@ General/miscellaneous
 - Fix usages of non-unicode ``gettext_lazy``
 - Improve API documentation of the models with model field descriptions
 
-SHUUP 1.1.0
+Shuup 1.1.0
 -----------
 
 Addons
@@ -142,7 +263,7 @@ General/miscellaneous
 
 - Add Shuup version to static urls
 
-SHUUP 1.0.0
+Shuup 1.0.0
 -----------
 
 Core
@@ -174,7 +295,8 @@ Core
 - API: Add option to filter cotacts with id, email and group id
 - API: add endpoint for Shipments
 - Add option to limit service availability based on order total
-- Add the setting `SHUUP_ERROR_PAGE_HANDLERS_SPEC` to handle custom error pages (400, 403, 404 and 500)
+- Add the setting ``SHUUP_ERROR_PAGE_HANDLERS_SPEC`` to handle custom error
+  pages (400, 403, 404 and 500)
 
 Admin
 ~~~~~
@@ -202,6 +324,7 @@ Admin
 Front
 ~~~~~
 
+- ``thumbnail`` template tag now returns SVG images as-is instead of crashing
 - Simple CMS and Category views now render metadata based on the description
 - Cache template helpers, sorts and filters using context cache
 - Enable password reset when shop is in maintenance mode
@@ -223,7 +346,7 @@ Campaigns
 ~~~~~~~~~
 
 - Match child products for parents
-- In `CategoryProductsBasketCondition` add option to exclude baskets
+- In ``CategoryProductsBasketCondition`` add option to exclude baskets
   containing products from certain categories.
 - Add option to select multiple categories to basket condition
 - Variation children should match rules based on parent
@@ -234,7 +357,7 @@ Simple CMS
 - Add rich text editor for CMS content
 
 
-SHUUP 0.5.8
+Shuup 0.5.8
 -----------
 
 Admin
@@ -250,7 +373,7 @@ Front
 - Fix bugs in rendering address and customer forms
 - Add admin link to toolbar
 
-SHUUP 0.5.7
+Shuup 0.5.7
 -----------
 
 Admin
@@ -265,7 +388,7 @@ Admin
 - List wizard phases at home view
 
 
-SHUUP 0.5.6
+Shuup 0.5.6
 -----------
 
 Admin
@@ -274,14 +397,14 @@ Admin
 - Add drag-and-drop support for product image and file uploads
 
 
-SHUUP 0.5.5
+Shuup 0.5.5
 -----------
 
 Core
 ~~~~
 
 - Allow refunding by arbitrary amounts and quantity-only refunds
-- Fix bug in `Order.can_set_complete`
+- Fix bug in ``Order.can_set_complete``
 - Currencies can be now created and edited through admin.
 
 Admin
@@ -304,7 +427,7 @@ Simple Supplier
   and counts
 
 
-SHUUP 0.5.4
+Shuup 0.5.4
 -----------
 
 Core
@@ -335,21 +458,21 @@ Xtheme
 
 - Add screenshot support for stylesheets
 
-SHUUP 0.5.3
+Shuup 0.5.3
 -----------
 
 Core
 ~~~~
 
-- Products shipping mode is now `SHIPPED` by default
+- Products shipping mode is now ``SHIPPED`` by default
 - Do not include not shipped products to shipments
-- `OrderSource.language` is now properly used.
-- Start using `Contact.language`.
-  It fallbacks to `settings.LANGUAGE_CODE` if not set.
-- Add `SHUUP_AUTO_SHOP_PRODUCT_CATEGORIES` option that
-  allows autopopulating categories. Default is `True`.
+- ``OrderSource.language`` is now properly used.
+- Start using ``Contact.language``.
+  It fallbacks to ``settings.LANGUAGE_CODE`` if not set.
+- Add ``SHUUP_AUTO_SHOP_PRODUCT_CATEGORIES`` option that
+  allows autopopulating categories. Default is ``True``.
 - Populate some unfilled customer fields from order
-- Add `is_not_paid` function for `Order` model.
+- Add ``is_not_paid`` function for ``Order`` model.
 - Allow zero price payments for zero price orders.
 
 Localization
@@ -366,21 +489,21 @@ Admin
 - Remove language layer from shop configurations
 - Fix bug in product cross-sell editview
 - Allow product attribute form extension through provides
-- Make form modifiers reusable. Users of `ShipmentFormModifier`
+- Make form modifiers reusable. Users of ``ShipmentFormModifier``
   should update any references to implement the
-  `shuup.admin.form_modifier.FormModifier` interface instead
+  ``shuup.admin.form_modifier.FormModifier`` interface instead
 - Add mass actions to products list
 - Add mass actions to orders list
 - Add mass actions to contacts list
 - Picotable lists now support mass actions.
-- Add `PostActionDropdownItem` baseclass for toolbar so actions requiring
+- Add ``PostActionDropdownItem`` baseclass for toolbar so actions requiring
   a POST request do not have to have a toolbar button of its own.
 - Add option to set zero price orders as paid without creating a payment manually.
 
 Front
 ~~~~~
 
-- Basket validation errors are now shown as messages instead of `HttpResponse 500`.
+- Basket validation errors are now shown as messages instead of ``HttpResponse 500``.
 - Show variation parents in highlight plugins
 - Fallback to variation parent image for variation children
   in basket, checkout and saved carts.
@@ -400,7 +523,7 @@ Importer
 - Fix `ForeignKey` importing.
 - Add `fields_to_skip` for skipping certain items in import.
 
-SHUUP 0.5.1
+Shuup 0.5.1
 -----------
 
 Released on 2016-10-12 09:30pm -0800.
@@ -410,7 +533,7 @@ Core
 
 - Fetch support id for shops sending telemetry
 - Remove shop languages, category, tax class, service provider and services
-  default record creation from `shuup_init` management command
+  default record creation from ``shuup_init`` management command
 
 Admin
 ~~~~~
@@ -442,7 +565,7 @@ Front
     - Enable option to configure sorts and filters for search.
     - Activate option for manufacturer filter
     - This change should be noted when updating latest
-      front for projects using `shuup.front`
+      front for projects using ``shuup.front``
 - Fix macro name in Single Page Checkout
 - Add Saved Carts to Dashboard
 - Add Order History to Dashboard
@@ -470,7 +593,7 @@ General/miscellaneous
 
 - Personal Order history: URL has now been changed from ``/orders`` to ``/order-history``
 
-SHUUP 0.5.0
+Shuup 0.5.0
 -----------
 
 Released on 2016-09-29 12:20pm -0800.
@@ -494,7 +617,7 @@ General/miscellaneous
 
 - Add support for Django 1.9.x
 
-SHUUP 0.4.7
+Shuup 0.4.7
 -----------
 
 Released on 2016-09-20 3:45pm -0800.
@@ -511,7 +634,7 @@ Front
 
 - Enhance default footer
 
-SHUUP 0.4.6.1
+Shuup 0.4.6.1
 -------------
 
 Released on 2016-09-12 3:45pm -0800.
@@ -536,7 +659,7 @@ Regions
 
 - Fix bug in regions encoding for Python 2
 
-SHUUP 0.4.6
+Shuup 0.4.6
 -----------
 
 Released on 2016-09-11 8:00pm -0800.
@@ -630,7 +753,7 @@ General/miscellaneous
 ~~~~~~~~~~~~~~~~~~~~~
 
 
-SHUUP 0.4.5
+Shuup 0.4.5
 -----------
 
 Released on 2016-09-04 3:45pm -0800.
@@ -676,7 +799,7 @@ General/miscellaneous
    - Ensure required fields if language is partially translated
 - MultiLanguageModelForm: Use Parler default as a default
 
-SHUUP 0.4.4
+Shuup 0.4.4
 -----------
 
 Released on 2016-08-28 6:40pm -0800.
@@ -755,7 +878,7 @@ General/miscellaneous
 * Fix bug in importing macro in registration app
 * Fix bug in pdf utils while fetching static resources
 
-SHUUP 0.4.3
+Shuup 0.4.3
 -----------
 
 Released on 2016-08-21 22:40pm -0800.
@@ -781,6 +904,7 @@ Front
 ~~~~~
 
 - Refactor default templates to allow better extensibility
+
   - Split up templates to small parts to allow small changes to template without
     overriding the whole template
   - Move included files to macros
@@ -789,6 +913,7 @@ Front
   - This change will probably cause issues with existing themes and
     all existing themes should be tested over this change before updating
     to live environment.
+
 - Add product SKU to searchable fields for simple search
 - Limit search results for simple search
 - Fix password recovery form bug with invalid email
@@ -802,7 +927,7 @@ Campaigns
 - Campaigns affecting a product are now shown on product page in admin
 
 
-SHUUP 0.4.2
+Shuup 0.4.2
 -----------
 
 Released on 2016-08-12 03:00pm -0800.
@@ -810,8 +935,8 @@ Released on 2016-08-12 03:00pm -0800.
 Core
 ~~~~
 
-- Fix `FormattedDecimalField` default value for form fields
-- Combine `TreeManager` and `TranslatableManager` querysets for categories
+- Fix ``FormattedDecimalField`` default value for form fields
+- Combine ``TreeManager`` and ``TranslatableManager`` querysets for categories
 - Exclude deleted orders from valid queryset
 - Enable soft delete for shipments
 
@@ -861,7 +986,7 @@ Reporting
 - Add Sales Per Hour Report
 - Add Reporting core
 
-SHUUP 0.4.1
+Shuup 0.4.1
 -----------
 
 Released on 2016-08-02 07:30pm -0800.
@@ -869,20 +994,20 @@ Released on 2016-08-02 07:30pm -0800.
 Core
 ~~~~
 
-- Add `get_customer_name` for `Order`
-- Exclude images from product `get_public_media`
-- Add parameter to `PriceDisplayFilter` to specify tax display mode
+- Add ``get_customer_name`` for ``Order``
+- Exclude images from product ``get_public_media``
+- Add parameter to ``PriceDisplayFilter`` to specify tax display mode
 - Add soft deletion of categories
 - Add support to sell products after stock is zero
 - Fix refunds for discount lines
 - Fix restocking issue when refunding unshipped products
-- Make payments for `CustomPaymentProcessor` not paid by default
+- Make payments for ``CustomPaymentProcessor`` not paid by default
 - Fix shipping status for orders with refunds
 - Fix bug in order total price rounding
-- Fix bug with duplicates in `Product.objects.list_visible()`
+- Fix bug with duplicates in ``Product.objects.list_visible()``
 - Fix restocking issues with refunded products
 - Add separate order line types for quantity and amount refunds
-- Add `can_create_shipment` and `can_create_payment` to `Order`
+- Add ``can_create_shipment`` and ``can_create_payment`` to ``Order``
 - Ensure refund amounts are associated with an order line
 - Fix tax handling for refunds
 - Fix bug: Prevent duplicate categories from all_visible-filter
@@ -899,7 +1024,7 @@ Admin
 - Fix product "Add new image" link
 - Fix content block styles that are styled by id
 - Add Orders section to product detail page
-- Add `admin_product_section` provide to make product detail extendable
+- Add ``admin_product_section`` provide to make product detail extendable
 - Fix bug with empty customer names in order list view
 - Add warning when editing order with no customer contact
 - Show account manager info on order detail page
@@ -933,14 +1058,14 @@ Admin
 - Populate tax number from contact for admin order creator
 - Move various dashboard blocks to own admin modules
 - Prevent shipments from being created for refunded products
-- Add `StockAdjustmentType` Enum
+- Add ``StockAdjustmentType`` Enum
 - Fix payment and shipment visibility in Orders admin
 - Manage category products from category edit view
 - Filter products based on category
 - Add permission check for dashboard blocks
 - Fix required permission issues for various modules
-- Make `model_url` context function and add permission check
-- Add permission check option to `get_model_url`
+- Make ``model_url`` context function and add permission check
+- Add permission check option to ``get_model_url``
 - Add permission check to toolbar button classes
 - Enable remarkable editor for service description
 - Add option to filter product list with manufacturer

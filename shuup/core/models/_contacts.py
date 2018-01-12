@@ -94,9 +94,14 @@ class Contact(PolymorphicShuupModel):
     default_contact_group_name = None
 
     created_on = models.DateTimeField(auto_now_add=True, editable=False, verbose_name=_('created on'))
+    modified_on = models.DateTimeField(
+        auto_now=True, editable=False, db_index=True, null=True, verbose_name=_('modified on'))
     identifier = InternalIdentifierField(unique=True, null=True, blank=True)
     is_active = models.BooleanField(default=True, db_index=True, verbose_name=_('active'), help_text=_(
         "Check this if the contact is an active customer."
+    ))
+    shops = models.ManyToManyField("shuup.Shop", blank=True, verbose_name=_('shops'), help_text=_(
+        "Inform which shops have access to this contact."
     ))
     # TODO: parent contact?
     default_shipping_address = models.ForeignKey(
@@ -292,10 +297,10 @@ class PersonContact(Contact):
     birth_date = models.DateField(blank=True, null=True, verbose_name=_('birth date'), help_text=_(
         "The birth date of the contact."
     ))
-    first_name = models.CharField(max_length=30, blank=True, verbose_name=_('first name'), help_text=_(
+    first_name = models.CharField(max_length=120, blank=True, verbose_name=_('first name'), help_text=_(
         "The first name of the contact."
     ))
-    last_name = models.CharField(max_length=50, blank=True, verbose_name=_('last name'), help_text=_(
+    last_name = models.CharField(max_length=120, blank=True, verbose_name=_('last name'), help_text=_(
         "The last name of the contact."
     ))
     # TODO: Figure out how/when/if the name and email fields are updated from users

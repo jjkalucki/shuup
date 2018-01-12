@@ -12,6 +12,7 @@ This module is installed as the `shuup_admin` template function namespace.
 
 import itertools
 
+from django.conf import settings
 from django.core.urlresolvers import NoReverseMatch, reverse
 from django.middleware.csrf import get_token
 from jinja2.utils import contextfunction
@@ -22,6 +23,7 @@ from shuup.admin.breadcrumbs import Breadcrumbs
 from shuup.admin.utils.urls import (
     get_model_url, manipulate_query_string, NoModelUrl
 )
+from shuup.core.models import Shop
 from shuup.core.telemetry import is_telemetry_enabled
 
 __all__ = ["get_menu_entry_categories", "get_front_url", "get_config", "model_url"]
@@ -70,10 +72,11 @@ def get_support_id(context):
 
 # TODO: Figure out a more extensible way to deal with this
 BROWSER_URL_NAMES = {
+    "select": "shuup_admin:select",
     "media": "shuup_admin:media.browse",
     "product": "shuup_admin:shop_product.list",
     "contact": "shuup_admin:contact.list",
-    "setLanguage": "shuup_admin:set-language",
+    "setLanguage": "shuup_admin:set-language"
 }
 
 
@@ -130,6 +133,29 @@ def model_url(context, model, kind="detail", default=None):
     """
     user = context.get("user")
     try:
-        return get_model_url(model, kind=kind, user=user)
+        request = context.get("request")
+        shop = request.shop if request else None
+        return get_model_url(model, kind=kind, user=user, shop=shop)
     except NoModelUrl:
         return default
+
+
+@contextfunction
+def get_shop_count(context):
+    """
+    Return the number of shops accessible by the currently logged in user
+    """
+    request = context["request"]
+    if not request or request.user.is_anonymous():
+        return 0
+    return Shop.objects.get_for_user(request.user).count()
+
+
+@contextfunction
+def get_admin_shop(context):
+    return context["request"].shop
+
+
+@contextfunction
+def is_multishop_enabled(context):
+    return settings.SHUUP_ENABLE_MULTIPLE_SHOPS is True

@@ -13,17 +13,19 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.http.response import HttpResponseRedirect, JsonResponse
 
+from shuup.core.basket.update_methods import BasketUpdateMethods
+from shuup.core.excs import ProductNotOrderableProblem
 from shuup.core.models import (
-    ProductVariationVariable, ProductVariationVariableValue, SalesUnit,
-    ShopProductVisibility
+    ProductMode, ProductVariationVariable, ProductVariationVariableValue,
+    SalesUnit, ShopProductVisibility
 )
 from shuup.front.basket import commands as basket_commands
 from shuup.front.basket import get_basket, get_basket_command_dispatcher
 from shuup.front.basket.command_dispatcher import BasketCommandDispatcher
 from shuup.front.signals import get_basket_command_handler
 from shuup.testing.factories import (
-    create_product, create_random_person, get_default_product,
-    get_default_shop, get_default_supplier
+    complete_product, create_product, create_random_person,
+    get_default_product, get_default_shop, get_default_supplier
 )
 from shuup.testing.utils import apply_request_middleware
 from shuup_tests.front.fixtures import get_request_with_basket
@@ -46,19 +48,25 @@ def test_dne():
 
 @pytest.mark.django_db
 def test_add_and_remove_and_clear():
-    product = get_default_product()
+    product = create_product('fractionable', fractional=True)
+    complete_product(product)
     supplier = get_default_supplier()
     request = get_request_with_basket()
     basket = request.basket
 
     with pytest.raises(ValidationError):
-        basket_commands.handle_add(request, basket, product_id=product.pk, quantity=-3)  # Ordering antimatter is not supported
+        # Ordering antimatter is not supported
+        basket_commands.handle_add(request, basket, product_id=product.pk, quantity=-3)
 
     # These will get merged into one line...
     basket_commands.handle_add(request, basket, **{"product_id": product.pk, "quantity": 1, "supplier_id": supplier.pk})
     basket_commands.handle_add(request, basket, **{"product_id": product.pk, "quantity": 2})
+
+    # Fractions should also be supported
+    basket_commands.handle_add(request, basket, **{"product_id": product.pk, "quantity": 0.75})
+
     # ... so there will be 3 products but one line
-    assert basket.product_count == 3
+    assert basket.product_count == 3.75
     lines = basket.get_lines()
     assert len(lines) == 1
     # ... and deleting that line will clear the basket...
@@ -71,6 +79,52 @@ def test_add_and_remove_and_clear():
     basket_commands.handle_clear(request, basket)
     assert basket.product_count == 0
 
+
+@pytest.mark.django_db
+def test_add_and_invalid_product():
+    shop = get_default_shop()
+    product = create_product('fractionable', fractional=True)
+    complete_product(product)
+    supplier = get_default_supplier()
+    request = get_request_with_basket()
+    basket = request.basket
+
+    # remove the shop product
+    product.get_shop_instance(shop).delete()
+
+    with pytest.raises(ValidationError) as exc:
+        basket_commands.handle_add(request, basket, **{
+            "product_id": product.pk, "quantity": 1, "supplier_id": supplier.pk
+        })
+    assert "Product not available in this shop" in exc.value.message
+
+
+@pytest.mark.django_db
+def test_add_invalid_product():
+    shop = get_default_shop()
+    supplier = get_default_supplier()
+    request = get_request_with_basket()
+    basket = request.basket
+
+    # cannot add simple/variable variation parent to the basket
+    parent = create_product("parent", shop=shop, supplier=supplier)
+    child = create_product("child", shop=shop, supplier=supplier)
+    child.link_to_parent(parent)
+    parent.refresh_from_db()
+    assert parent.mode == ProductMode.SIMPLE_VARIATION_PARENT
+
+    with pytest.raises(ValidationError) as excinfo:
+        basket_commands.handle_add(request, basket, product_id=parent.pk, quantity=2)
+    assert excinfo.value.code == 'invalid_product'
+
+    child.unlink_from_parent()
+    child.link_to_parent(parent, variables={"size": "XXL"})
+    parent.refresh_from_db()
+    assert parent.mode == ProductMode.VARIABLE_VARIATION_PARENT
+
+    with pytest.raises(ValidationError) as excinfo:
+        basket_commands.handle_add(request, basket, product_id=parent.pk, quantity=3)
+    assert excinfo.value.code == 'invalid_product'
 
 @pytest.mark.django_db
 def test_ajax():
@@ -148,13 +202,15 @@ def test_complex_variation():
         kwargs = {"var_%d" % color_var.pk: yellow_color_value.pk, "var_%d" % size_var.pk: small_size_value.pk + 1}
         basket_commands.handle_add_var(request, basket, parent.id, **kwargs)
 
+
 @pytest.mark.django_db
 def test_basket_update():
     request = get_request_with_basket()
     basket = request.basket
-    product = get_default_product()
-    basket_commands.handle_add(request, basket, product_id=product.pk, quantity=1)
-    assert basket.product_count == 1
+    product = create_product('fractionable', fractional=True)
+    complete_product(product)
+    basket_commands.handle_add(request, basket, product_id=product.pk, quantity=1.75)
+    assert basket.product_count == 1.75
     line_id = basket.get_lines()[0].line_id
     basket_commands.handle_update(request, basket, **{"q_%s" % line_id: "2"})
     assert basket.product_count == 2
@@ -328,6 +384,23 @@ def test_basket_update_with_package_product():
     assert basket.product_count == 1
     basket_commands.handle_update(request, basket, **{"q_%s" % package_line.line_id: "2"})
     assert basket.product_count == 2
+
+    # Clear basket
+    basket_commands.handle_clear(request, basket)
+    assert basket.product_count == 0
+
+    # Remove the Shop Product from the child
+    child.get_shop_instance(shop).delete()
+
+    # Child not available for this shop
+    with pytest.raises(ProductNotOrderableProblem):
+        basket_commands.handle_add(request, basket, product_id=parent.pk, quantity=1)
+
+    # use the update methods object to check orderability errors
+    update_methods = BasketUpdateMethods(request, basket)
+    errors = update_methods._get_orderability_errors(parent, supplier, 1)
+    assert len(errors) == 2
+    assert any(["product_not_available_in_shop" in error.code for error in errors])
 
 
 @pytest.mark.django_db

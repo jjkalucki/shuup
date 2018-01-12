@@ -4,10 +4,26 @@ shuup.core.api package
 Submodules
 ----------
 
+shuup.core.api.address module
+-----------------------------
+
+.. automodule:: shuup.core.api.address
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 shuup.core.api.attribute module
 -------------------------------
 
 .. automodule:: shuup.core.api.attribute
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+shuup.core.api.basket module
+----------------------------
+
+.. automodule:: shuup.core.api.basket
     :members:
     :undoc-members:
     :show-inheritance:
@@ -28,10 +44,50 @@ shuup.core.api.contacts module
     :undoc-members:
     :show-inheritance:
 
+shuup.core.api.front_orders module
+----------------------------------
+
+.. automodule:: shuup.core.api.front_orders
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+shuup.core.api.front_passwords module
+-------------------------------------
+
+.. automodule:: shuup.core.api.front_passwords
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+shuup.core.api.front_products module
+------------------------------------
+
+.. automodule:: shuup.core.api.front_products
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+shuup.core.api.front_users module
+---------------------------------
+
+.. automodule:: shuup.core.api.front_users
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 shuup.core.api.manufacturer module
 ----------------------------------
 
 .. automodule:: shuup.core.api.manufacturer
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+shuup.core.api.mixins module
+----------------------------
+
+.. automodule:: shuup.core.api.mixins
     :members:
     :undoc-members:
     :show-inheritance:
@@ -68,6 +124,14 @@ shuup.core.api.products module
     :undoc-members:
     :show-inheritance:
 
+shuup.core.api.service module
+-----------------------------
+
+.. automodule:: shuup.core.api.service
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 shuup.core.api.shipments module
 -------------------------------
 
@@ -88,6 +152,14 @@ shuup.core.api.suppliers module
 -------------------------------
 
 .. automodule:: shuup.core.api.suppliers
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+shuup.core.api.tax module
+-------------------------
+
+.. automodule:: shuup.core.api.tax
     :members:
     :undoc-members:
     :show-inheritance:

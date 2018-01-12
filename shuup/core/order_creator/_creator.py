@@ -10,9 +10,11 @@ from __future__ import unicode_literals
 import warnings
 from decimal import Decimal
 
+from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.utils.encoding import force_text
 
-from shuup.core.models import Order, OrderLine, OrderLineType
+from shuup.core.models import Order, OrderLine, OrderLineType, ShopProduct
 from shuup.core.order_creator.signals import order_creator_finished
 from shuup.core.shortcuts import update_order_line_from_product
 from shuup.core.utils import context_cache
@@ -105,7 +107,11 @@ class OrderProcessor(object):
         if not order_line.supplier:
             raise ValueError("Order line has no supplier")
         order = order_line.order
-        shop_product = order_line.product.get_shop_instance(order.shop)
+        try:
+            shop_product = order_line.product.get_shop_instance(order.shop)
+        except ShopProduct.DoesNotExist:
+            raise ValidationError("%s: Not available in %s" % (order_line.product, order.shop), code="invalid_shop")
+
         shop_product.raise_if_not_orderable(
             supplier=order_line.supplier,
             quantity=order_line.quantity,
@@ -189,7 +195,7 @@ class OrderProcessor(object):
             creator=real_user_or_none(order_source.creator),
             shipping_method=order_source.shipping_method,
             payment_method=order_source.payment_method,
-            customer_comment=order_source.customer_comment,
+            customer_comment=(order_source.customer_comment if order_source.customer_comment else ""),
             marketing_permission=bool(order_source.marketing_permission),
             language=order_source.language,
             ip_address=order_source.ip_address,
@@ -252,6 +258,10 @@ class OrderProcessor(object):
 
         if changed_fields:
             order.customer.save()
+
+        # add shop to the customer shop list if needed
+        if settings.SHUUP_ENABLE_MULTIPLE_SHOPS and settings.SHUUP_MANAGE_CONTACTS_PER_SHOP:
+            order.customer.shops.add(order.shop)
 
     def _assign_code_usages(self, order_source, order):
         order.codes = order_source.codes

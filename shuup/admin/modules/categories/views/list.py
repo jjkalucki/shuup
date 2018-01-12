@@ -28,8 +28,8 @@ class CategoryListView(PicotableListView):
         Column(
             "status", _(u"Status"),
             filter_config=ChoicesFilter(
-               choices=CategoryStatus.choices,
-               default=CategoryStatus.VISIBLE.value
+                choices=CategoryStatus.choices,
+                default=CategoryStatus.VISIBLE.value
             )
         ),
         Column("visibility", _(u"Visibility"), filter_config=ChoicesFilter(choices=CategoryVisibility.choices)),
@@ -37,13 +37,15 @@ class CategoryListView(PicotableListView):
 
     def get_name_filter_choices(self):
         choices = []
-        for c in Category.objects.all_except_deleted():
+        shop = self.request.shop
+        for c in Category.objects.all_except_deleted(shop=shop):
             name = self.format_name(c)
             choices.append((c.pk, name))
         return choices
 
     def get_queryset(self):
-        return Category.objects.all_except_deleted()
+        shop = self.request.shop
+        return Category.objects.all_except_deleted(shop=shop)
 
     def format_name(self, instance, *args, **kwargs):
         level = getattr(instance, instance._mptt_meta.level_attr)

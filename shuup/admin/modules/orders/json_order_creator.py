@@ -10,12 +10,12 @@ from __future__ import unicode_literals
 from copy import deepcopy
 
 from django import forms
-from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.core.exceptions import ValidationError
 from django.utils.translation import ugettext as _
 
 from shuup.core.models import (
     CompanyContact, Contact, MutableAddress, OrderLineType, OrderStatus,
-    PaymentMethod, PersonContact, Product, ShippingMethod, Shop
+    PaymentMethod, PersonContact, Product, ShippingMethod, Shop, ShopProduct
 )
 from shuup.core.order_creator import OrderCreator, OrderModifier, OrderSource
 from shuup.core.order_creator._source import LineSource
@@ -50,6 +50,11 @@ class JsonOrderCreator(object):
     def safe_get_first(model, **lookup):
         # A little helper function to clean up the code below.
         return model.objects.filter(**lookup).first()
+
+    @staticmethod
+    def is_empty_address(address_data):
+        """An address will have at minimum a tax_number field it will still be considered empty"""
+        return list(address_data.keys()) == ['tax_number']
 
     def add_error(self, error):
         self._errors.append(error)
@@ -112,13 +117,14 @@ class JsonOrderCreator(object):
             return False
         try:
             shop_product = product.get_shop_instance(source.shop)
-        except ObjectDoesNotExist:
+        except ShopProduct.DoesNotExist:
             self.add_error(ValidationError((_("Product %(product)s is not available in the %(shop)s shop.") % {
                 "product": product,
                 "shop": source.shop
             }), code="no_shop_product"))
             return False
-        supplier = shop_product.suppliers.first()  # TODO: Allow setting a supplier?
+
+        supplier = shop_product.get_supplier(source.customer, sl_kwargs["quantity"], source.shipping_address)
 
         sl_kwargs["product"] = product
         sl_kwargs["supplier"] = supplier
@@ -173,6 +179,8 @@ class JsonOrderCreator(object):
         return customer
 
     def _get_address(self, address, is_company, save):
+        if self.is_empty_address(address):
+            return None
         address_form = forms.modelform_factory(MutableAddress, exclude=[])
         address_form_instance = address_form(data=address)
         address_form_instance.full_clean()
@@ -182,8 +190,7 @@ class JsonOrderCreator(object):
                 for error_msg in errors:
                     self.add_error(
                         ValidationError(
-                            "%(field_label)s: %(error_msg)s",
-                            params={"field_label": field_label, "error_msg": error_msg},
+                            "%(field_label)s: %(error_msg)s" % {"field_label": field_label, "error_msg": error_msg},
                             code="invalid_address"
                         )
                     )
@@ -206,7 +213,7 @@ class JsonOrderCreator(object):
         if order_to_update:
             source.update_from_order(order_to_update)
 
-        customer_data = state.pop("customer", None)
+        customer_data = state.pop("customer", {})
         billing_address_data = customer_data.pop("billingAddress", {})
         shipping_address_data = (
             billing_address_data
@@ -215,21 +222,23 @@ class JsonOrderCreator(object):
         is_company = customer_data.pop("isCompany", False)
         save_address = customer_data.pop("saveAddress", False)
 
-        billing_address = self._get_address(billing_address_data, is_company, save)
-        if self.errors:
-            return
-        shipping_address = self._get_address(shipping_address_data, is_company, save)
-        if self.errors:
-            return
+        billing_address = None
+        shipping_address = None
+        customer = None
 
-        customer = self._get_customer(customer_data, billing_address_data, is_company, save)
-        if not customer:
-            return
+        if customer_data:
+            customer = self._get_customer(customer_data, billing_address_data, is_company, save)
+            billing_address = self._get_address(billing_address_data, is_company, save)
+            if self.errors:
+                return
+            shipping_address = self._get_address(shipping_address_data, is_company, save)
+            if self.errors:
+                return
 
-        if save and save_address:
-            customer.default_billing_address = billing_address
-            customer.default_shipping_address = shipping_address
-            customer.save()
+            if save and save_address:
+                customer.default_billing_address = billing_address
+                customer.default_shipping_address = shipping_address
+                customer.save()
 
         methods_data = state.pop("methods", None) or {}
         shipping_method = methods_data.pop("shippingMethod")
@@ -303,9 +312,6 @@ class JsonOrderCreator(object):
         if not self.is_valid:  # If we encountered any errors thus far, don't bother going forward
             return None
 
-        if not self.is_valid:
-            return None
-
         if order_to_update:
             for code in order_to_update.codes:
                 source.add_code(code)
@@ -368,6 +374,9 @@ class JsonOrderCreator(object):
         :return: The created order, or None if something failed along the way
         :rtype: Order|None
         """
+        # Collect ids for products that were removed from the order for stock update
+        removed_product_ids = self.get_removed_product_ids(state, order_to_update)
+
         source = self.create_source_from_state(state, order_to_update=order_to_update, save=True)
         if source:
             source.modified_by = modified_by
@@ -375,7 +384,51 @@ class JsonOrderCreator(object):
         try:
             order = modifier.update_order_from_source(order_source=source, order=order_to_update)
             self._postprocess_order(order, state)
-            return order
         except Exception as exc:
             self.add_error(exc)
             return
+
+        # Update stock for products that were completely removed from the order
+        if removed_product_ids:
+            self.update_stock_for_removed_products(removed_product_ids, source.shop)
+
+        return order
+
+    def get_removed_product_ids(self, state, order_to_update):
+        """
+        Collects product ids for products which were removed from the order.
+
+        :param state: State dictionary
+        :type state: dict
+        :param order_to_update: Order object to edit
+        :type order_to_update: shuup.core.models.Order
+        :return: set
+        """
+
+        current_lines = state.get("lines", [])
+        current_product_ids = set()
+        for line in current_lines:
+            if line["type"] == "product" and line["product"] is not None:
+                current_product_ids.add(line["product"]["id"])
+
+        old_prod_ids = set()
+        for line in order_to_update.lines.exclude(product_id=None):
+            old_prod_ids.add(line.product.id)
+
+        return old_prod_ids - current_product_ids
+
+    def update_stock_for_removed_products(self, removed_ids, shop):
+        """
+        Update stocks for products which were completely removed from the updated order.
+
+        :param removed_ids: Set of removed product ids
+        :type removed_ids: set
+        :param shop: Shop instance where this order is made
+        :type shop: shuup.core.models.Shop
+        """
+        for prod_id in removed_ids:
+            product = Product.objects.get(id=prod_id)
+            shop_product = product.get_shop_instance(shop)
+            supplier = shop_product.suppliers.first()
+            if supplier:
+                supplier.module.update_stock(product)

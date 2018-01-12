@@ -100,6 +100,6 @@ class SaveFormPartsMixin(object):
             return HttpResponseRedirect(self.get_success_url())
 
         if is_new:
-            return HttpResponseRedirect(get_model_url(self.object))
+            return HttpResponseRedirect(get_model_url(self.object, shop=self.request.shop))
         else:
             return HttpResponseRedirect(self.request.path)

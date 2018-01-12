@@ -7,7 +7,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-function activateSelect($select, model, attrs={}) {
+function activateSelect($select, model, searchMode, attrs={}) {
     if(model === undefined) {
         return $select.select2($.extend(true, {
             language: "xx"
@@ -17,10 +17,10 @@ function activateSelect($select, model, attrs={}) {
         language: "xx",
         minimumInputLength: 3,
         ajax: {
-            url: "/sa/select",
+            url: window.ShuupAdminConfig.browserUrls.select,
             dataType: "json",
             data: function(params) {
-                return {model: model, search: params.term};
+                return {model: model, searchMode: searchMode, search: params.term};
             },
             processResults: function (data) {
                 return {
@@ -39,7 +39,8 @@ function activateSelects() {
         // only activate selects that aren't already select2 inputs
         if (!select.hasClass("select2-hidden-accessible") && !select.hasClass("no-select2")) {
             const model = select.data("model");
-            activateSelect(select, model);
+            const searchMode = select.data("search-mode");
+            activateSelect(select, model, searchMode);
         }
     });
 }

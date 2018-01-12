@@ -20,9 +20,8 @@ from django.utils.http import is_safe_url, urlsafe_base64_decode
 from django.utils.translation import ugettext as _
 from django.views.generic import FormView, TemplateView
 
-from shuup.front.apps.auth.forms import (
-    EmailAuthenticationForm, RecoverPasswordForm
-)
+from shuup.core.utils.forms import RecoverPasswordForm
+from shuup.front.apps.auth.forms import EmailAuthenticationForm
 from shuup.utils.excs import Problem
 
 
@@ -34,6 +33,11 @@ class LoginView(FormView):
         context = super(LoginView, self).get_context_data(**kwargs)
         context[REDIRECT_FIELD_NAME] = self.request.GET.get(REDIRECT_FIELD_NAME)
         return context
+
+    def get_form_kwargs(self):
+        kwargs = super(LoginView, self).get_form_kwargs()
+        kwargs['request'] = self.request
+        return kwargs
 
     def get_form(self, form_class=None):
         form = super(LoginView, self).get_form(form_class)

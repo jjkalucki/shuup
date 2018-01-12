@@ -9,16 +9,18 @@ import decimal
 import json
 from decimal import Decimal
 
+import pytest
 from django.utils.timezone import now
 from django.utils.translation import activate
 
-import pytest
 from shuup.admin.modules.orders.views.edit import OrderEditView
 from shuup.campaigns.models.campaigns import CatalogCampaign
 from shuup.campaigns.models.catalog_filters import (
     CategoryFilter, ProductFilter, ProductTypeFilter
 )
-from shuup.campaigns.models.context_conditions import ContactGroupCondition
+from shuup.campaigns.models.context_conditions import (
+    ContactGroupCondition
+)
 from shuup.campaigns.models.product_effects import (
     ProductDiscountAmount, ProductDiscountPercentage
 )
@@ -146,7 +148,6 @@ def test_campaign_all_rules_must_match1(rf):
     campaign.save()
 
     ProductDiscountAmount.objects.create(campaign=campaign, discount_amount=discount_amount)
-
 
     product = create_product("Just-A-Product-Too", shop, default_price=original_price)
 
@@ -379,7 +380,6 @@ def test_availability(rf):
 
     ProductDiscountAmount.objects.create(discount_amount=discount_amount, campaign=campaign)
 
-
     assert not campaign.is_available()
 
 
@@ -403,7 +403,7 @@ def test_admin_order_with_campaign(rf, admin_user):
         "customer_id": customer.id,
         "id": product.id,
         "quantity": 1
-    }), user=admin_user)
+    }), user=admin_user, HTTP_HOST=shop.domain, shop=shop)
     response = OrderEditView.as_view()(request)
     data = json.loads(response.content.decode("utf8"))
     assert decimal.Decimal(data['unitPrice']['value']) == shop.create_price(10).value
@@ -412,32 +412,46 @@ def test_admin_order_with_campaign(rf, admin_user):
 @pytest.mark.django_db
 def test_product_catalog_campaigns():
     shop = get_default_shop()
+
     product = create_product("test", shop, default_price=20)
+    parent_product = create_product("parent", shop, default_price=40)
+    no_shop_child = create_product("child-no-shop")
+    shop_child = create_product("child-shop", shop, default_price=60)
+
+    shop_child.link_to_parent(parent_product)
+    no_shop_child.link_to_parent(parent_product)
+
     shop_product = product.get_shop_instance(shop)
+    parent_shop_product = parent_product.get_shop_instance(shop)
+    child_shop_product =shop_child.get_shop_instance(shop)
 
     cat = Category.objects.create(name="test")
     campaign = CatalogCampaign.objects.create(shop=shop, name="test", active=True)
 
     # no rules
     assert CatalogCampaign.get_for_product(shop_product).count() == 0
+    assert CatalogCampaign.get_for_product(parent_shop_product).count() == 0
+    assert CatalogCampaign.get_for_product(child_shop_product).count() == 0
 
     # category filter that doesn't match
     cat_filter = CategoryFilter.objects.create()
     cat_filter.categories.add(cat)
     campaign.filters.add(cat_filter)
     assert CatalogCampaign.get_for_product(shop_product).count() == 0
+    assert CatalogCampaign.get_for_product(parent_shop_product).count() == 0
+    assert CatalogCampaign.get_for_product(child_shop_product).count() == 0
 
-    shop_product.primary_category = cat
-    shop_product.save()
-    assert CatalogCampaign.get_for_product(shop_product).count() == 1
-    shop_product.categories.remove(cat)
-    shop_product.primary_category = None
-    shop_product.save()
-    assert CatalogCampaign.get_for_product(shop_product).count() == 0
-    # category filter that matches
-    shop_product.categories.add(cat)
-    assert CatalogCampaign.get_for_product(shop_product).count() == 1
-
+    for sp in [shop_product, parent_shop_product, child_shop_product]:
+        sp.primary_category = cat
+        sp.save()
+        assert CatalogCampaign.get_for_product(sp).count() == 1
+        sp.categories.remove(cat)
+        sp.primary_category = None
+        sp.save()
+        assert CatalogCampaign.get_for_product(sp).count() == 0
+        # category filter that matches
+        sp.categories.add(cat)
+        assert CatalogCampaign.get_for_product(sp).count() == 1
 
     # create other shop
     shop1 = Shop.objects.create(name="testshop", identifier="testshop", status=ShopStatus.ENABLED, public_name="testshop")

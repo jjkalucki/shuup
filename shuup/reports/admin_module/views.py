@@ -35,7 +35,10 @@ class ReportView(FormView):
         selected_report = self.request.GET.get("report")
         form_info = self.report_classes[selected_report] if selected_report else None
         if not form_info:
-            form_info = six.next(six.itervalues(get_report_classes()))
+            report_classes = get_report_classes()
+            if not report_classes:
+                return None
+            form_info = six.next(six.itervalues(report_classes))
         self.form_class = form_info.form_class
         return self._get_form(form_info)
 
@@ -43,7 +46,7 @@ class ReportView(FormView):
         return [(k, v.title) for k, v in six.iteritems(get_report_classes())]
 
     def _get_form(self, selected):
-        form = self.form_class(**self.get_form_kwargs())
+        form = self.form_class(request=self.request, **self.get_form_kwargs())
         report_field = forms.ChoiceField(
             choices=self._get_choices(),
             label=_("Type"),
@@ -59,5 +62,11 @@ class ReportView(FormView):
         report = form.get_report_instance()
         if not self.request.POST.get("force_download") and writer.writer_type in ("html", "pprint", "json"):
             output = writer.render_report(report, inline=True)
-            return self.render_to_response(self.get_context_data(form=form, result=output, current_report=report))
+            return self.render_to_response(self.get_context_data(form=form, result=output))
         return writer.get_response(report=report)
+
+    def get_context_data(self, **kwargs):
+        context = super(ReportView, self).get_context_data(**kwargs)
+        selected_report = self.request.GET.get("report")
+        context["current_report"] = self.report_classes[selected_report] if selected_report else None
+        return context

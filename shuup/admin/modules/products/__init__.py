@@ -33,7 +33,7 @@ from shuup.admin.utils.urls import (
 from shuup.admin.views.home import HelpBlockCategory, SimpleHelpBlock
 from shuup.core.models import (
     Product, ProductCrossSell, ProductPackageLink, ProductVariationResult,
-    Shop, ShopProduct
+    ShopProduct
 )
 
 
@@ -97,6 +97,7 @@ class ProductModule(AdminModule):
         ]
 
     def get_search_results(self, request, query):
+        shop = request.shop
         minimum_query_length = 3
         skus_seen = set()
         if len(query) >= minimum_query_length:
@@ -110,12 +111,12 @@ class ProductModule(AdminModule):
             )
             pks = [pk for (pk, count) in pk_counter.most_common(10)]
 
-            for product in Product.objects.filter(pk__in=pks):
+            for product in Product.objects.filter(pk__in=pks, shop_products__shop_id=shop.id):
                 relevance = 100 - pk_counter.get(product.pk, 0)
                 skus_seen.add(product.sku.lower())
                 yield SearchResult(
                     text=force_text(product),
-                    url=get_model_url(product),
+                    url=get_model_url(product, shop=request.shop),
                     category=_("Products"),
                     relevance=relevance
                 )
@@ -165,9 +166,8 @@ class ProductModule(AdminModule):
             get_default_model_permissions(File)
         )
 
-    def get_model_url(self, object, kind):
+    def get_model_url(self, object, kind, shop=None):
         if isinstance(object, Product):
-            shop = Shop.objects.first()
             object = object.get_shop_instance(shop)
         return derive_model_url(ShopProduct, "shuup_admin:shop_product", object, kind)
 
